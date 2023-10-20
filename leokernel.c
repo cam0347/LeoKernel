@@ -51,6 +51,8 @@ void kmain(struct leokernel_boot_params bootp) {
     */
     gdt_load_segments();
 
+    //commento di prova
+
     /*
     initialize memory manager (physical allocator, virtual allocator, object allocator, kernel heap).
     kernel heap functions can be called after this point.
