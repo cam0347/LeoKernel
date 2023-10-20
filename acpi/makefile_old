@@ -1,0 +1,6 @@
+GCC_INPUT = *.c
+GCC_INCLUDE = ../
+GCC_FLAGS = -c -ffreestanding -nostdlib -O0
+
+all: *.c
+	@gcc $(GCC_FLAGS) -I$(GCC_INCLUDE) $(GCC_INPUT)
