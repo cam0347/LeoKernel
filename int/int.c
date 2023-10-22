@@ -4,6 +4,7 @@
 #include <int/include/apic.h>
 #include <io/include/port_io.h>
 #include <mm/include/obj_alloc.h>
+#include <include/mem.h>
 
 /*
 0x00 	Division by zero
@@ -62,6 +63,7 @@ bool setup_interrupts() {
         gsi_map[i] = i;
     }
 
+    memclear(isr_hooks, 256 * ISR_MAX_HOOKS * sizeof(void *));
     return true;
 }
 

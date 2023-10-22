@@ -105,7 +105,6 @@ void apic_timer_mode(uint8_t mode);
 void apic_timer_div(uint8_t div);
 void apic_timer_set_count(uint32_t count);
 uint32_t apic_timer_get_count();
-void apic_timer_set_mask(bool masked);
 void apic_sleep(uint32_t ms);
 void apic_timer_hook();
 
@@ -114,3 +113,4 @@ void apic_timer_hook();
 void send_eoi();
 bool apic_irq(uint8_t irq, uint8_t int_vector, ioapic_int_delivery_mode_t del_mode, uint8_t dest_mode, uint8_t polarity, uint8_t trigger_mode, bool masked, uint8_t destination);
 bool apic_set_mask(uint8_t irq, bool masked);
+void apic_lvt_set_mask(uint32_t reg, bool masked);

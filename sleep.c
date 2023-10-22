@@ -19,8 +19,9 @@ bool sleep(uint16_t ms) {
     }
 
     pit_command(PIT_COMM_BIN | PIT_COMM_RATE_GENERATOR | PIT_COMM_CHANNEL0 | PIT_COMM_LOBYTE_HIBYTE);
-    pit_write(0, 0xA6);
-    pit_write(0, 0x04); //divider 1190 (0x04A6)
+    //divider 1190 (0x04A6)
+    pit_write(0, 0xA6); //low byte
+    pit_write(0, 0x04); //high byte
     pit_run();
 
     while(count-- > 0) {

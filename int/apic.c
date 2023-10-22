@@ -41,13 +41,19 @@ If not, that variable is initialized to its default value.
 */
 bool init_apic() {
     if (!check_apic()) {
-        return false;
+        return false; //to be changed: use pic
     }
 
     disable_pic(); //to use apic we have to disable pic first
 
-    if (lapic_address == null) {
-        lapic_address = DEFAULT_LAPIC_ADDRESS;
+    if (!lapic_address) {
+        uint32_t lo, hi;
+        get_msr(0x1B, &lo, &hi); //IA32_APIC_BASE_MSR
+        lapic_address = (void *)(((uint64_t) lo) | (((uint64_t) hi & 0x0F) << 32));
+
+        if (!lapic_address) {
+            lapic_address = DEFAULT_LAPIC_ADDRESS;
+        }
     }
 
     if (get_physical_address(lapic_address) == TRANSLATION_UNKNOWN) {
@@ -56,7 +62,7 @@ bool init_apic() {
     }
 
     //sets the spurious interrupt vector register
-    lapic_write(LAPIC_SIV_REGISTER, 0x1FF);
+    lapic_write(LAPIC_SIV_REGISTER, lapic_read(LAPIC_SIV_REGISTER) | 0x100);
 
     //set some local vector table entries
     lapic_set_lvt_entry(LAPIC_LVT_TIMER, 0x19, 1, 0, true); //apic timer
@@ -179,6 +185,13 @@ bool apic_set_mask(uint8_t irq, bool masked) {
     return true;
 }
 
+/* masks or unmask a local interrupt */
+void apic_lvt_set_mask(uint32_t reg, bool masked) {
+    uint32_t old = lapic_read(reg) & 0xFFFEFFFF; //reset bit 16
+    old |= ((uint32_t) masked) << 16;
+    lapic_write(reg, old);
+}
+
 //reads a register mapped at lapic_address, the registers are 4 bytes long but 16 byte aligned
 uint32_t lapic_read(uint32_t reg) {
     return *(uint32_t *)(lapic_address + reg);
@@ -219,6 +232,7 @@ void lapic_set_lvt_entry(uint32_t reg, uint8_t int_num, uint8_t polarity, uint8_
 }
 
 void disable_pic() {
+    //masks all irq lines on master and slave pic
     outb(SLAVE_PIC_DATA, 0xFF);
     outb(MASTER_PIC_DATA, 0xFF);
 }
@@ -261,7 +275,7 @@ void apic_timer_init() {
     //approximate the apic timer ticks/ms
     apic_timer_div(LAPIC_TIMER_DIV1);
     apic_timer_mode(LAPIC_TIMER_PERIODIC_MODE);
-    apic_timer_set_mask(false);
+    apic_lvt_set_mask(LAPIC_LVT_TIMER, false);
 
     uint64_t avg = 0;
     for (uint32_t i = 0; i < 100; i++) {
@@ -271,11 +285,10 @@ void apic_timer_init() {
         avg += count;
     }
 
-    apic_timer_set_mask(true);
+    apic_lvt_set_mask(LAPIC_LVT_TIMER, true);
     avg /= 100;
     apic_timer_frequency = avg;
     apic_sleep_ready = true; //from now on the system can use the apic timer to sleep a certain amount of milliseconds
-    printf("apic timer frequency: %d\n", apic_timer_frequency);
 }
 
 /*
@@ -309,13 +322,6 @@ uint32_t apic_timer_get_count() {
     return lapic_read(APIC_TIMER_CCR);
 }
 
-/* masks or unmasks the lapic timer interrupt */
-void apic_timer_set_mask(bool masked) {
-    uint32_t reg = lapic_read(LAPIC_LVT_TIMER) & 0xFFFEFFFF; //reset bit 16
-    reg |= ((uint32_t) masked) << 16;
-    lapic_write(LAPIC_LVT_TIMER, reg);
-}
-
 void apic_sleep(uint32_t ms) {
     if (!apic_sleep_ready) {
         return;
@@ -323,7 +329,7 @@ void apic_sleep(uint32_t ms) {
 
     apic_timer_div(LAPIC_TIMER_DIV1);
     apic_timer_mode(LAPIC_TIMER_PERIODIC_MODE);
-    apic_timer_set_mask(false);
+    apic_lvt_set_mask(LAPIC_LVT_TIMER, false);
     uint8_t hook_n = int_hook(0x19, (void *) apic_timer_hook);
 
     while(ms > 0) {
@@ -334,7 +340,7 @@ void apic_sleep(uint32_t ms) {
     }
 
     int_unhook(0x19, hook_n);
-    apic_timer_set_mask(true);
+    apic_lvt_set_mask(LAPIC_LVT_TIMER, true);
 }
 
 /* used to implement apic sleep */

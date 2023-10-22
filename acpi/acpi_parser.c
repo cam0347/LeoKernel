@@ -15,6 +15,7 @@ void *__acpi_ssdt;
 void *__acpi_facs;
 acpi_preferred_power_management_profile __machine_type;
 bool __acpi_manager_ready = false;
+extern void *lapic_address; //defined in apic.c
 
 bool init_acpi(struct leokernel_boot_params bootp) {
     __acpi_xsdt = (acpi_xsdt_t *) bootp.xsdt;
@@ -25,9 +26,15 @@ bool init_acpi(struct leokernel_boot_params bootp) {
     parse_fadt(__acpi_fadt); //sets __acpi_dsdt and __acpi_facs
     if (__acpi_dsdt == null) {return false;}
 
+    lapic_address = null;
+    if (__acpi_madt->local_apic_addr) {
+        lapic_address = (void *)(uint64_t) __acpi_madt->local_apic_addr;
+    }
+
     extern uint32_t lapics_array_index; //defined in apic.c
     lapics_array_index = 0;
     parse_madt(__acpi_madt);
+
     return true;
 }
 
@@ -105,12 +112,14 @@ void switch_madt_entry(void *entry, acpi_madt_entry_type type) {
         case lapic:
             acpi_madt_entry_lapic *lapic = (acpi_madt_entry_lapic *) entry;
             save_lapic_info(lapic->apic_id, lapic->acpi_cpu_id, lapic->flags); //save this lapic info in the array defined in apic.c
+            printf("LAPIC: cpuid %d - lapic id %d\n", lapic->acpi_cpu_id, lapic->apic_id);
             break;
 
         //defines an i/o apic
         case io_apic:
             acpi_madt_entry_io_apic *ioapic = (acpi_madt_entry_io_apic *) entry;
             save_ioapic_info(ioapic->io_apic_id, ioapic->io_apic_addr, ioapic->global_system_interrupt_base); //save this ioapic info in the array defined in apic.c
+            printf("IOAPIC: 0x%X - gsi base %d - id %d\n", ioapic->io_apic_addr, ioapic->global_system_interrupt_base, ioapic->io_apic_id);
             break;
 
         //defines an i/o interrupt map to the gsi
@@ -118,6 +127,7 @@ void switch_madt_entry(void *entry, acpi_madt_entry_type type) {
             acpi_madt_entry_io_source_override *io_source_override = (acpi_madt_entry_io_source_override *) entry;
             extern uint8_t gsi_map[]; //defined in int.c
             gsi_map[io_source_override->irq_source] = io_source_override->global_system_interrupt;
+            printf("ioapic int map %d -> %d\n", io_source_override->irq_source, io_source_override->global_system_interrupt);
             break;
 
         //defines an i/o apic source that should me marked as non-maskable
@@ -137,7 +147,6 @@ void switch_madt_entry(void *entry, acpi_madt_entry_type type) {
         //defines an override address of the local apic
         case lapic_addr_override:
             acpi_madt_entry_lapic_addr_override *lapic_addr_ovr = (acpi_madt_entry_lapic_addr_override *) entry;
-            extern void *lapic_address; //defined in apic.c
             lapic_address = (void *) lapic_addr_ovr->lapic_phys_addr;
             break;
 

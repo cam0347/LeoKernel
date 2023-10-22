@@ -16,6 +16,7 @@
 #include <io/include/files.h>
 #include <io/include/pit.h>
 #include <mm/include/obj_alloc.h>
+#include <include/sleep.h>
 
 void kmain(struct leokernel_boot_params bootp) {
     //if the boot parameters are null, halt the cpu
@@ -51,8 +52,6 @@ void kmain(struct leokernel_boot_params bootp) {
     */
     gdt_load_segments();
 
-    //commento di prova
-
     /*
     initialize memory manager (physical allocator, virtual allocator, object allocator, kernel heap).
     kernel heap functions can be called after this point.
@@ -71,7 +70,17 @@ void kmain(struct leokernel_boot_params bootp) {
     }
 
     init_pit();
+
+    printf("pit sleep start\n");
+    sleep(1000);
+    printf("pit sleep end\n");
+
     apic_timer_init();
+
+    printf("apic sleep start\n");
+    apic_sleep(1000);
+    printf("apic sleep end\n");
+    sys_hlt();
 
     /* initialize file handling */
     if (!init_files()) {
@@ -90,13 +99,7 @@ void kmain(struct leokernel_boot_params bootp) {
     it also adds an ioapic redirection entry to map irq1 to isr 0x17 (see isr.c)
     */
     init_keyboard_controller();
-
-    extern void cursor_blinkr();
-    int_hook(0x19, cursor_blinkr);
-    apic_timer_mode(LAPIC_TIMER_PERIODIC_MODE);
-    apic_timer_div(LAPIC_TIMER_DIV1);
-    apic_timer_set_count(500000000);
-    apic_timer_set_mask(false);
+    
     while(true);
 	sys_hlt();
 }
