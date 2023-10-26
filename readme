@@ -1,4 +1,4 @@
-# CamOS kernel
+**CamOS kernel**
 ## What's CamOS
 CamOS is a 64 bit toy/hobby operating system, i'm doing this just because i wanted to know more on how an operating system works, and because.. why not.
 This is meant to be a command line operating system so it's "hardwired" to be so.
