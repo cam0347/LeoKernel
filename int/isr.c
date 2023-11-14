@@ -5,6 +5,7 @@
 #include <include/panic.h>
 #include <int/include/apic.h>
 #include <io/include/keyboard.h>
+#include <io/include/ps2_keyboard.h>
 #include <io/include/port_io.h>
 #include <mm/include/segmentation.h>
 #include <int/include/int.h>
@@ -300,10 +301,10 @@ void irq0(struct x64_int_frame *frame) {
     send_eoi();
 }
 
-//keyboard (int 0x18)
+//ps/2 keyboard (int 0x18)
 __attribute__((interrupt))
 void irq1(struct x64_int_frame *frame) {
-    keyboard_read();
+    keypressed(ps2_in());
     int_exec_hooks(24);
     enable_int();
     send_eoi();

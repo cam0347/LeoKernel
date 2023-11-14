@@ -23,11 +23,14 @@ To increase system flexibility when assigning memory space usage, the I/O APIC's
 #include <mm/include/paging.h>
 #include <include/sleep.h>
 #include <int/include/int.h>
+#include <include/mem.h>
 
 void *lapic_address = null; //lapic registers physical frame
 lapic_t system_lapics[APIC_ARRAYS_LENGTH]; //contains lapic descriptors
 ioapic_t system_ioapics[256]; //contains ioapic descriptors
 uint32_t lapics_array_index;
+extern void *isr_hooks[256][ISR_MAX_HOOKS]; //defined in int.c
+extern uint8_t gsi_map[256]; //defined in int.c
 
 /* apic timer variables */
 bool apic_sleep_ready = false;
@@ -46,34 +49,77 @@ bool init_apic() {
 
     disable_pic(); //to use apic we have to disable pic first
 
+    //if the lapic address wasn't set when acpi tables were read, set it to the address stored in the apic base msr
     if (!lapic_address) {
         uint32_t lo, hi;
         get_msr(0x1B, &lo, &hi); //IA32_APIC_BASE_MSR
         lapic_address = (void *)(((uint64_t) lo) | (((uint64_t) hi & 0x0F) << 32));
-
-        if (!lapic_address) {
-            lapic_address = DEFAULT_LAPIC_ADDRESS;
-        }
     }
 
-    if (get_physical_address(lapic_address) == TRANSLATION_UNKNOWN) {
-        printf("APIC addresses not mapped to virtual memory (0x%X)\n", lapic_address);
+    //if the lapic address stored in the apic base msr wasn't valid, set it to it's default value (0xFEE00000)
+    if (!lapic_address) {
+        lapic_address = DEFAULT_LAPIC_ADDRESS;
+    }
+
+    //checks if lapic and ioapics addresses are correctly mapped into virtual memory
+    if (!check_apic_addresses()) {
+        printf("LAPIC or I/O APIC(s) addresses are not mapped in virtual memory\n");
         return false;
     }
+
+    clear_int_redirection_table();
+
+    //set LVT entries (timer, lint0 and lint1)
+    lapic_set_lvt_entry(LAPIC_LVT_TIMER, 0x19, 1, 0, true); //timer
+    lapic_set_lvt_entry(LAPIC_LVT_LINT0, 0x2, 1, 0, false); //lint0 nmi
+    lapic_set_lvt_entry(LAPIC_LVT_LINT1, 0x2, 1, 0, false); //lint1 nmi
 
     //sets the spurious interrupt vector register
     lapic_write(LAPIC_SIV_REGISTER, lapic_read(LAPIC_SIV_REGISTER) | 0x100);
 
-    //set some local vector table entries
-    lapic_set_lvt_entry(LAPIC_LVT_TIMER, 0x19, 1, 0, true); //apic timer
-    lapic_set_lvt_entry(LAPIC_LVT_LINT0, 0x2, 0, 0, false); //lint0 nmi
-    lapic_set_lvt_entry(LAPIC_LVT_LINT1, 0x2, 0, 0, false); //lint1 nmi
-
     apic_sleep_ready = false;
     apic_timer_frequency = 0;
     apic_sleep_in_progress = false;
+    memclear(isr_hooks, 256 * ISR_MAX_HOOKS);
 
     return true;
+}
+
+/*
+this function checks if the virtual address of local apic and io apic matches the physical address.
+since both lapic and ioapic are only physically addressable, it's necessaey that the virtual address the kernel uses to access the apic
+translates to their physical address.
+at this moment the only possibility is to have the same virtual and physical address, this has to be improved to allow to map a "random" virtual address
+to the right physical address
+*/
+bool check_apic_addresses() {
+    //check lapic address
+    if (get_physical_address(lapic_address) != lapic_address) {
+        return false;
+    }
+
+    //for each found io apic check its address
+    for (uint16_t i = 0; i < 256; i++) {
+        ioapic_t *ioapic = &system_ioapics[i];
+        void *ioapic_address = (void *)(uint64_t) ioapic->ioapic_addr;
+
+        if (ioapic_address) {
+            if (get_physical_address(ioapic_address) != ioapic_address) {
+                return false;
+            }
+        } else {
+            continue;
+        }
+    }
+
+    return true;
+}
+
+/* resets the interrupt redirection table */
+void clear_int_redirection_table() {
+    for (uint16_t i = 0; i < 256; i++) {
+        apic_clear_irq(i);
+    }
 }
 
 //returns the descriptor of the ioapic that can handle the specified irq number if found
@@ -132,6 +178,21 @@ void ioapic_write(uint8_t id, uint32_t reg, uint32_t data) {
     *data_register = data;
 }
 
+/* reads an irq redirection entry */
+bool ioapic_read_irq_entry(uint8_t irq, uint64_t *entry) {
+    *entry = 0;
+    ioapic_t *ioapic_struct;
+
+    if (!(ioapic_struct = get_ioapic_by_irq(irq))) {
+        return false;
+    }
+
+    uint32_t entry_lo = ioapic_read(ioapic_struct->ioapic_id, 0x10 + 2 * irq);
+    uint32_t entry_hi = ioapic_read(ioapic_struct->ioapic_id, 0x10 + 2 * irq + 1);
+    *entry = entry_lo | (uint64_t) entry_hi << 32;
+    return true;
+}
+
 /*
 sets an irq routing rule.
 parameters:
@@ -167,6 +228,20 @@ bool apic_irq(uint8_t irq, uint8_t int_vector, ioapic_int_delivery_mode_t del_mo
     ioapic_write(ioapic_struct->ioapic_id, 0x10 + 2 * irq, entry_lo);
     ioapic_write(ioapic_struct->ioapic_id, 0x10 + 2 * irq + 1, entry_hi);
 
+    return true;
+}
+
+/* clears an entry in the ioapic redirection table */
+bool apic_clear_irq(uint8_t irq) {
+    ioapic_t *ioapic_struct;
+
+    //if a suitable ioapic is not found, return false
+    if (!(ioapic_struct = get_ioapic_by_irq(irq))) {
+        return false;
+    }
+
+    ioapic_write(ioapic_struct->ioapic_id, 0x10 + 2 * irq, 1 << 16); //set masked bit
+    ioapic_write(ioapic_struct->ioapic_id, 0x10 + 2 * irq + 1, 0);
     return true;
 }
 
@@ -244,8 +319,11 @@ bool check_apic() {
 }
 
 /* called by an isr to acknowledge an irq */
+__attribute__((always_inline))
 inline void send_eoi() {
-    lapic_write(LAPIC_EOI_REGISTER, 0);
+    for (uint8_t i = 0; i < 10; i++) {
+        lapic_write(LAPIC_EOI_REGISTER, 0);
+    }
 }
 
 void save_lapic_info(uint8_t lapic_id, uint8_t cpu_id, uint32_t flags) {

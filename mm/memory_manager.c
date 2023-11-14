@@ -54,7 +54,7 @@ bool init_mm(struct leokernel_boot_params bootp) {
 
     //free the frames that were previously allocted to the memory map
     for (uint32_t i = 0; i < (bootp.map_size * sizeof(leokernel_memory_descriptor_t)) / PAGE_SIZE; i++) {
-        kfree_frame(bootp.map + i * PAGE_SIZE);
+        kfree_frame((void *) bootp.map + i * PAGE_SIZE);
     }
 
     //init kernel heap
@@ -83,89 +83,6 @@ This function returns the address of the allocated memory or null if:
 - if the system doesn't have enough virtual or physical memory
 - if an operation with the memory map or page table went wrong
 */
-/*void *kalloc_page(uint32_t n) {
-    if (n == 0 || n > ALLOC_MAX_PAGES) {
-        return null;
-    }
-
-    //scan the memory map to find an available virtual address
-    for (uint64_t i = 0; i < mmap_size; i++) {
-        leokernel_memory_descriptor_t *entry;
-
-        if (!obj_pool_get(mmap_pool_id, (void **) &entry, i)) {
-            break;
-        }
-
-        //check if we reached the end of the map, in that case exit the loop and return null
-        if (!DESCRIPTOR_VALID(entry->flags)) {
-            break;
-        }
-
-        //if this descriptor is marked as available and it refers a number of page greater or equal than the number of page we need, use it
-        if (entry->pages >= n && DESCRIPTOR_AVAILABLE(entry->flags) && entry->type == usable) {
-            void *frames[n];
-
-            //allocate the required number of frames and save their address
-            for (uint32_t i = 0; i < n; i++) {
-                if ((frames[i] = kalloc_frame()) == null) {
-                    page_allocation_failed:
-
-                    for (int j = 0; j < n; j++) {
-                        kfree_frame(frames[j]);
-                    }
-
-                    return null;
-                }
-            }
-
-            void *base_address; //base virtual address of the memory we're allocating, set later
-            leokernel_memory_descriptor_t new_entry;
-            init_descriptor(&new_entry, (void *) entry->virtual_address, frames[0], 0, LEOKERNEL_MEMORY_MAP_VALID, kernel_reserved);
-            base_address = (void *) new_entry.virtual_address;
-            uint32_t m = 0;
-
-            while(m < n) {
-                if (m > 0 && frames[m - 1] + PAGE_SIZE != frames[m]) {
-                    new_entry.flags |= LEOKERNEL_MEMORY_MAP_HAS_NEXT;
-                    if (!obj_pool_put(mmap_pool_id, (void *) &new_entry, mmap_last_ind)) {goto page_allocation_failed;}
-                    mmap_last_ind++;
-                    init_descriptor(&new_entry, (void *) new_entry.virtual_address + m * PAGE_SIZE, frames[m], 0, LEOKERNEL_MEMORY_MAP_VALID, kernel_reserved);
-                }
-
-                if (!map_page((void *)(base_address + m * PAGE_SIZE), frames[m])) {goto page_allocation_failed;}
-                new_entry.pages++;
-                entry->virtual_address += PAGE_SIZE;
-                entry->pages--;
-                m++;
-
-                if (m == n) {
-                    if (!obj_pool_put(mmap_pool_id, (void *) &new_entry, mmap_last_ind)) {goto page_allocation_failed;}
-                    mmap_last_ind++;
-                }
-            }
-
-            //if this descriptor is now empty, delete it from the map
-            if (entry->pages == 0) {
-                if (i == mmap_size - 1) { //if it was the last, jut remove it
-                    memclear(entry, sizeof(leokernel_memory_descriptor_t));
-                } else { //otherwise move every descriptor after this a position back
-                    memmove((void *) entry, (void *)(entry + 1), (mmap_last_ind - i - 1) * sizeof(leokernel_memory_descriptor_t));
-                }
-
-                mmap_last_ind--;
-            }
-
-            //get the pointer of the first entry of the map to operate on them directly
-            leokernel_memory_descriptor_t *first_entry;
-            obj_pool_get(mmap_pool_id, (void *) &first_entry, 0);
-            order_map(first_entry, mmap_last_ind);
-            return base_address;
-        }
-    }
-    
-    return null;
-}*/
-
 void *kalloc_page(uint32_t n) {
     if (n == 0 || n > ALLOC_MAX_PAGES) {
         return null;
@@ -371,29 +288,6 @@ bool kmap_page(void *virtual, void *physical) {
     order_map(first_entry, mmap_last_ind);
     return map_page((void *) page_address, (void *) frame_address);
 }
-
-/*
-Removes a descriptor from the map.
-This function doesn't free the descriptor's associated frames.
-This function could trigger a page fault/general protection fault
-*/
-/*bool remove_descriptor(uint32_t ind) {
-    leokernel_memory_descriptor_t *doomed;
-
-    if (!obj_pool_get(mmap_pool_id, (void **) &doomed, ind)) {
-        return false;
-    }
-
-    memclear(doomed, sizeof(leokernel_memory_descriptor_t));
-
-    while(DESCRIPTOR_VALID((doomed + 1)->flags)) {
-        memmove(doomed, doomed + 1, sizeof(leokernel_memory_descriptor_t));
-        doomed++;
-    }
-
-    mmap_last_ind--;
-    return true;
-}*/
 
 /*
 This function orders the memory map by virtual address.

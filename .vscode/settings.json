@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "keyboard.h": "c",
+        "ps2_keyboard.h": "c",
+        "int.h": "c",
+        "pci_tree.h": "c",
+        "pit.h": "c",
+        "term.h": "c",
+        "pci.h": "c"
+    }
+}

@@ -4,6 +4,7 @@
 #define PIT_CHANNEL1_DATA_PORT 0x41 //channel 1 is unused and may not even exist
 #define PIT_CHANNEL2_DATA_PORT 0x42 //channel 2 is connected to the pc speaker
 #define PIT_MODE_COMMAND_REGISTER_PORT 0x43
+#define PIT_IRQ 2
 
 /* use these to compose a command for the pit */
 

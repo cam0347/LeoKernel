@@ -4,9 +4,14 @@
 #include <int/include/int.h>
 
 bool sleep_in_progress = false;
+extern bool pit_ready; //defined in pit.c
 
 //sleep ms milliseconds (uses PIT)
 bool sleep(uint16_t ms) {
+    if (!pit_ready) {
+        return false;
+    }
+    
     if (ms == 0) {
         return true; //no need to bother the old pit
     }

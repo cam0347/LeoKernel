@@ -17,6 +17,7 @@
 #include <io/include/pit.h>
 #include <mm/include/obj_alloc.h>
 #include <include/sleep.h>
+#include <tty/include/term.h>
 
 void kmain(struct leokernel_boot_params bootp) {
     //if the boot parameters are null, halt the cpu
@@ -69,28 +70,19 @@ void kmain(struct leokernel_boot_params bootp) {
         fail("error setting up APIC");
     }
 
+    /* initialize system timers */
     init_pit();
-
-    printf("pit sleep start\n");
-    sleep(1000);
-    printf("pit sleep end\n");
-
     apic_timer_init();
 
-    printf("apic sleep start\n");
-    apic_sleep(1000);
-    printf("apic sleep end\n");
-    sys_hlt();
+    printf("Configuring PCI and PCIe...\n");
+    if (!init_pci()) {
+        fail("error configuring PCI and PCIe");
+    }
 
     /* initialize file handling */
     if (!init_files()) {
         fail("error initializing file handling");
     }
-
-    printf("Enumerating PCI...\n");
-    init_pci();
-
-    sys_hlt();
 
     /* HERE GOES THE INITIALIZATION OF THE TERMINAL */
 
@@ -98,7 +90,8 @@ void kmain(struct leokernel_boot_params bootp) {
     inits keyboard input (by default set to PS/2).
     it also adds an ioapic redirection entry to map irq1 to isr 0x17 (see isr.c)
     */
-    init_keyboard_controller();
+    init_keyboard();
+    init_terminal();
     
     while(true);
 	sys_hlt();

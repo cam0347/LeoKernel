@@ -81,6 +81,8 @@ typedef enum {
 /* generic functions */
 
 bool init_apic();
+void clear_int_redirection_table();
+bool check_apic_addresses();
 void disable_pic();
 bool check_apic();
 
@@ -96,6 +98,7 @@ void save_lapic_info(uint8_t lapic_id, uint8_t cpu_id, uint32_t flags);
 ioapic_t *get_ioapic_by_irq(uint8_t irq);
 uint32_t ioapic_read(uint8_t id, uint32_t reg);
 void ioapic_write(uint8_t id, uint32_t reg, uint32_t data);
+bool ioapic_read_irq_entry(uint8_t irq, uint64_t *entry);
 void save_ioapic_info(uint8_t ioapic_id, uint32_t addr, uint32_t gsib);
 
 /* apic timer functions */
@@ -112,5 +115,6 @@ void apic_timer_hook();
 
 void send_eoi();
 bool apic_irq(uint8_t irq, uint8_t int_vector, ioapic_int_delivery_mode_t del_mode, uint8_t dest_mode, uint8_t polarity, uint8_t trigger_mode, bool masked, uint8_t destination);
+bool apic_clear_irq(uint8_t irq);
 bool apic_set_mask(uint8_t irq, bool masked);
 void apic_lvt_set_mask(uint32_t reg, bool masked);

@@ -108,12 +108,13 @@ typedef union {
 
 //header type 0x02 not implemented
 
-void init_pci();
-uint32_t pci_ioconf_read(uint8_t bus, uint8_t dev, uint8_t func, uint8_t offset);
+bool init_pci();
+uint32_t pci_config_read_dword(uint8_t bus, uint8_t dev, uint8_t func, uint8_t offset);
+void pci_config_write_dword(uint8_t bus, uint8_t dev, uint8_t func, uint8_t offset, uint32_t data);
 void pci_general_device_reverse_endianess(pci_general_dev_t *dev);
 void pci_ptp_bridge_reverse_endianess(pci_pci_bridge_t *dev);
-bool pci_read_entry(uint8_t bus, uint8_t dev, uint8_t fnc, pci_device_t *out);
-bool pcie_read_entry(void *conf_base, uint8_t bus_start, uint8_t bus, uint8_t dev, uint8_t fnc, pci_device_t *out);
+bool pci_config_read_entry(uint8_t bus, uint8_t dev, uint8_t fnc, pci_device_t *out);
+bool pcie_config_read_entry(void *conf_base, uint8_t bus_start, uint8_t bus, uint8_t dev, uint8_t fnc, pci_device_t *out);
 void enum_pci();
 void enum_pcie();
 void pci_scan_dev(uint8_t bus, uint8_t dev);

@@ -75,7 +75,7 @@ uint64_t write(uint32_t fd, void *buffer, uint64_t count) {
 }
 
 uint64_t read(uint32_t fd, void *buffer, uint64_t count) {
-    if (!buffer || count == 0 || fd >= MAX_FILES || !files_ready) {
+    if (count == 0 || fd >= MAX_FILES || !files_ready) {
         return 0;
     }
 
@@ -89,7 +89,10 @@ uint64_t read(uint32_t fd, void *buffer, uint64_t count) {
         count = file->size;
     }
 
-    memcpy(buffer, file->ptr, count);
+    if (buffer) {
+        memcpy(buffer, file->ptr, count);
+    }
+
     file->size -= count;
     return count;
 }

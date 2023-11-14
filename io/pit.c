@@ -7,7 +7,11 @@
 bool pit_ready = false;
 
 void init_pit() {
-    apic_irq(2, 0x17, fixed, physical, active_high, edge, true, 0); //set pit redirection entry, initially masked
+    //set pit redirection entry, initially masked
+    if (!apic_irq(PIT_IRQ, 0x17, fixed, physical, active_high, edge, true, 0)) {
+        return; //che fare?
+    }
+
     pit_ready = true;
 }
 
@@ -65,7 +69,7 @@ void pit_run() {
         return;
     }
 
-    apic_set_mask(2, false);
+    apic_set_mask(PIT_IRQ, false);
 }
 
 //masks pit irq
@@ -74,5 +78,5 @@ void pit_stop() {
         return;
     }
 
-    apic_set_mask(2, true);
+    apic_set_mask(PIT_IRQ, true);
 }
