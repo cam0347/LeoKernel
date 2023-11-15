@@ -1,25 +1,33 @@
 #pragma once
 #include <include/types.h>
 #include <io/include/pci.h>
-#define PCI_BUS_INITIAL_NUMBER 0
+#define PCI_INITIAL_BUS 0
 
-struct pci_tree_dev_node {
-    pci_general_dev_t dev;
-    struct pci_tree_bus_node *bus;
-    struct pci_tree_dev_node *next;
-};
+typedef struct pci_tree_dev_node {
+    pci_general_dev_t *dev;                           //pointer to the actual data structure
+    struct pci_tree_bus_node *bus;                    //pointer to the bus this devices is attached to
+    struct pci_tree_dev_node *next;                   //next device on this bus
+} pci_tree_device_t;
 
-struct pci_tree_bus_node {
-    pci_pci_bridge_t bus;
-    uint8_t bus_num;
-    struct pci_tree_bus_node *sub;
-    struct pci_tree_bus_node *next;
-    struct pci_tree_dev_node *devs;
-};
+typedef struct pci_tree_bus_node {
+    uint8_t id;                                       //bus id
+    struct pci_tree_bridge_node *bridges;             //pointer to the bridges to other buses
+    struct pci_tree_dev_node *devs;                   //pointer to a list of devices
+} pci_tree_bus_t;
 
-typedef struct pci_tree_dev_node pci_tree_dev_node_t;
-typedef struct pci_tree_bus_node pci_tree_bus_node_t;
+typedef struct pci_tree_bridge_node {
+    pci_tree_bus_t *primary;                          //pointer to primary (upstream) bus
+    pci_tree_bus_t *secondary;                        //pointer to secondary (downstream) bus
+    pci_pci_bridge_t *bridge;                         //pointer to the actual data structure
+    struct pci_tree_bridge_node *next;                //pointer to the next bridge (sibling bridges share the upstream bus)
+} pci_tree_bridge_t;
 
-void init_pci_tree(void);
-bool pci_tree_append_child(pci_tree_bus_node_t *bus, pci_general_dev_t *child);
-bool pci_tree_append_bus(pci_tree_bus_node_t *master, pci_pci_bridge_t *slave);
+bool init_pci_tree(void);
+void pci_tree_print(void);
+
+pci_tree_bus_t *pci_tree_get_bus_by_id(uint8_t id);
+pci_tree_bus_t *pci_tree_create_bus(uint8_t id);
+bool pci_tree_install_bus(pci_tree_bus_t *primary, pci_tree_bus_t *secondary, pci_pci_bridge_t *bridge);
+
+pci_tree_device_t *pci_tree_create_device(pci_general_dev_t *dev, pci_tree_bus_t *bus);
+bool pci_tree_install_device(pci_tree_device_t *dev, pci_tree_bus_t *bus);

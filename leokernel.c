@@ -75,9 +75,12 @@ void kmain(struct leokernel_boot_params bootp) {
     apic_timer_init();
 
     printf("Configuring PCI and PCIe...\n");
+
     if (!init_pci()) {
         fail("error configuring PCI and PCIe");
     }
+
+    pci_tree_print();
 
     /* initialize file handling */
     if (!init_files()) {

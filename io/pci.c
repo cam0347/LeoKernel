@@ -7,6 +7,7 @@
 #include <acpi/include/acpi_parser.h>
 #include <tty/include/tty.h>
 #include <mm/include/obj_alloc.h>
+#include <include/assert.h>
 
 bool pcie_supported = false;
 pool_t pci_dev_pool_id;
@@ -21,13 +22,21 @@ bool init_pci() {
         return false;
     }
 
+    if (!init_pci_tree()) {
+        return false;
+    }
+
+    assert_true(pcie_supported); //---------------------------------- to be removed ------------------------------------------
+
     if (pcie_supported) {
-        enum_pcie();
+        if (!enum_pcie()) {
+            return false;
+        }
     } else {
         enum_pci();
     }
 
-    for (int i = 0; i < pci_dev_pool_last_ind; i++) {
+    /*for (int i = 0; i < pci_dev_pool_last_ind; i++) {
         pci_device_t *dev;
         obj_pool_get(pci_dev_pool_id, (void **) &dev, i);
         pci_dev_header_t *header = (pci_dev_header_t *) dev;
@@ -40,14 +49,9 @@ bool init_pci() {
         } else {
             printf("other %d %d %d [header type, class, subclass]\n", dev->general.header.header_type, dev->general.header.class_code, dev->general.header.subclass);
         }
-    }
+    }*/
 
     return true;
-}
-
-void request_bar_size(uint8_t bus, uint8_t dev, uint8_t func) {
-    pci_config_read_dword(bus, dev, func, 4);
-    pci_config_write_dword(bus, dev, func, 4, 0xFFFFFFFF);
 }
 
 //read a dword from the PCI I/O configuration space

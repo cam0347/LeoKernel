@@ -65,6 +65,16 @@ void term_putc(char c) {
 
     if ((ks.capslock || ks.shift) && c >= 'a' && c <= 'z') {
         c -= 32;
+    } else if (ks.altgr) {
+        switch(c) {
+            case ';':
+                c = '@';
+                break;
+
+            case '\'':
+                c = '#';
+                break;
+        }
     }
 
     printf("%c", c);

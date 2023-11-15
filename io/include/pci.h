@@ -47,9 +47,9 @@ typedef struct {
     pci_dev_header_t header;
     uint32_t bar0;
     uint32_t bar1;
-    uint8_t primary_bus_number;
-    uint8_t secondary_bus_number;
-    uint8_t subordinate_bus_number;
+    uint8_t primary_bus_number;            //upstream bus number
+    uint8_t secondary_bus_number;          //downstream bus number
+    uint8_t subordinate_bus_number;        //the highest bus number of all of the buses that can be reached downstream of the bridge
     uint8_t secondary_latency_timer;
     uint8_t io_base;
     uint8_t io_limit;
@@ -114,8 +114,5 @@ void pci_config_write_dword(uint8_t bus, uint8_t dev, uint8_t func, uint8_t offs
 void pci_general_device_reverse_endianess(pci_general_dev_t *dev);
 void pci_ptp_bridge_reverse_endianess(pci_pci_bridge_t *dev);
 bool pci_config_read_entry(uint8_t bus, uint8_t dev, uint8_t fnc, pci_device_t *out);
-bool pcie_config_read_entry(void *conf_base, uint8_t bus_start, uint8_t bus, uint8_t dev, uint8_t fnc, pci_device_t *out);
 void enum_pci();
-void enum_pcie();
 void pci_scan_dev(uint8_t bus, uint8_t dev);
-void pcie_scan_device(void *conf_base, uint8_t bus_start, uint8_t bus, uint8_t dev);
