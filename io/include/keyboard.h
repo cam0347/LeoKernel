@@ -71,3 +71,5 @@ typedef struct {
 bool init_keyboard(void);
 void keypressed(uint8_t code);
 void keyboard_control(uint8_t control);
+void keyboard_wait(char *msg);
+void keyboard_wait_handler();

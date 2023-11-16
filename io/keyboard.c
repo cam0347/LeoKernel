@@ -3,6 +3,8 @@
 #include <io/include/files.h>
 #include <int/include/apic.h>
 #include <tty/include/term.h>
+#include <int/include/int.h>
+#include <tty/include/tty.h>
 
 keyboard_status_t ks;
 bool keyboard_ready = false;
@@ -106,4 +108,22 @@ void keyboard_control(uint8_t control) {
             ks.capslock = !ks.capslock;
             break;
     }
+}
+
+/* waits for the user to press a key */
+bool keyboard_wait_in_progress = false;
+void keyboard_wait(char *msg) {
+    if (msg) {
+        printf("%s\n", msg);
+    }
+
+    keyboard_wait_in_progress = true;
+    uint8_t hook_n = int_hook(0x18, (void *) &keyboard_wait_handler);
+    printf("hook n %d\n", hook_n);
+    while(keyboard_wait_in_progress);
+    int_unhook(0x18, hook_n);
+}
+
+void keyboard_wait_handler() {
+    keyboard_wait_in_progress = false;
 }
