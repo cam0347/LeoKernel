@@ -23,6 +23,8 @@ typedef struct pci_tree_bridge_node {
 } pci_tree_bridge_t;
 
 bool init_pci_tree(void);
+void pci_tree_print_indent(uint8_t indent);
+void pci_tree_print_bus(pci_tree_bus_t *bus, uint8_t indent);
 void pci_tree_print(void);
 
 pci_tree_bus_t *pci_tree_get_bus_by_id(uint8_t id);

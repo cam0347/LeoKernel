@@ -8,23 +8,22 @@
 #include <tty/include/tty.h>
 #include <mm/include/obj_alloc.h>
 #include <include/assert.h>
+#include <io/include/devs.h>
+#include <drv/ide/include/ide.h>
 
 bool pcie_supported = false;
-pool_t pci_dev_pool_id;
-uint32_t pci_dev_pool_last_ind = 0;
+extern pool_t ide_controllers_pool_id; //defined in ide.c
 
 bool init_pci() {
     void *mcfg = acpi_locate_table("MCFG", 0);
     pcie_supported = mcfg ? true : false;
-    pci_dev_pool_last_ind = 0;
-
-    if (!create_obj_pool(&pci_dev_pool_id, sizeof(pci_device_t), 128, manual)) {
-        return false;
-    }
 
     if (!init_pci_tree()) {
         return false;
     }
+
+    //create some pools
+    if (!create_obj_pool(&ide_controllers_pool_id, sizeof(ide_controller_t), 8, manual)) {return false;}
 
     assert_true(pcie_supported); //---------------------------------- to be removed ------------------------------------------
 
@@ -36,22 +35,34 @@ bool init_pci() {
         enum_pci();
     }
 
-    /*for (int i = 0; i < pci_dev_pool_last_ind; i++) {
-        pci_device_t *dev;
-        obj_pool_get(pci_dev_pool_id, (void **) &dev, i);
-        pci_dev_header_t *header = (pci_dev_header_t *) dev;
-
-        if ((header->header_type & 0x7F) == general_device) {
-            printf("general device %d %d\n", dev->general.header.class_code, dev->general.header.subclass);
-        } else if ((header->header_type & 0x7F) == pci_to_pci_bridge) {
-            pci_pci_bridge_t *bridge = (pci_pci_bridge_t *) dev;
-            printf("pci-to-pci bridge %d %d %d\n", bridge->primary_bus_number, bridge->secondary_bus_number, bridge->subordinate_bus_number);
-        } else {
-            printf("other %d %d %d [header type, class, subclass]\n", dev->general.header.header_type, dev->general.header.class_code, dev->general.header.subclass);
-        }
-    }*/
-
     return true;
+}
+
+/* configures the device, called by pci/pcie bus scan functions */
+bool pci_init_device(pci_general_dev_t *dev) {
+    if (!dev) {
+        return false;
+    }
+
+    switch((pci_dev_type_t) dev->header.class_code) {
+        case mass_storage:
+            return devs_config_mass_storage(dev);
+            break;
+    }
+}
+
+uint32_t pci_read_capability_register(pci_general_dev_t *dev, uint8_t reg) {
+    if (!dev->capabilities_ptr) {
+        return 0;
+    }
+
+    /*
+    the capabilities pointer is an offset into this device's configuration space,
+    the lowest 2 bits of that field are reserved and must me masked.
+    The register (reg) selects a 4-byte register into the capabilities list entry.
+    */
+    uint32_t *data = (void *) dev + (dev->capabilities_ptr & 0xFC) + reg * 4;
+    return *data;
 }
 
 //read a dword from the PCI I/O configuration space
@@ -159,7 +170,6 @@ void pci_scan_dev(uint8_t bus, uint8_t dev) {
             printf("0x%X\n", addr);
         }
 
-        obj_pool_put(pci_dev_pool_id, (void *) &devfnc, pci_dev_pool_last_ind++);
         bool multifunction = devfnc.general.header.header_type >> 7;
 
         if (!multifunction && fnc == 0) {

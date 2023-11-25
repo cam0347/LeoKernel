@@ -9,6 +9,7 @@
 #include <mm/include/paging.h>
 #include <acpi/include/acpi_parser.h>
 #include <io/include/pci.h>
+#include <io/include/pci_tree.h>
 #include <include/panic.h>
 #include <int/include/apic.h>
 #include <include/math.h>
@@ -18,6 +19,7 @@
 #include <mm/include/obj_alloc.h>
 #include <include/sleep.h>
 #include <tty/include/term.h>
+#include <drv/ide/include/ide_interface.h>
 
 void kmain(struct leokernel_boot_params bootp) {
     //if the boot parameters are null, halt the cpu
@@ -80,7 +82,23 @@ void kmain(struct leokernel_boot_params bootp) {
         fail("error configuring PCI and PCIe");
     }
 
+    void ide_debug();
+    ide_debug();
+    printf("[IDE DEBUG END]\n");
+    sys_hlt();
+
     pci_tree_print();
+
+    void *data = kmalloc(512);
+    printf("buffer address: 0x%X (phys 0x%X)\n", data, get_physical_address(data));
+
+    if (ide_int_read((ide_device_id_t) {.controller = 0, .bus = 0, .drive = 1}, 0, 1, data)) {
+        printf("read succesful\n");
+    } else {
+        printf("read unsuccesful\n");
+    }
+
+    sys_hlt();
 
     /* initialize file handling */
     if (!init_files()) {

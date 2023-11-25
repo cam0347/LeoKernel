@@ -112,14 +112,14 @@ void switch_madt_entry(void *entry, acpi_madt_entry_type type) {
         case lapic:
             acpi_madt_entry_lapic *lapic = (acpi_madt_entry_lapic *) entry;
             save_lapic_info(lapic->apic_id, lapic->acpi_cpu_id, lapic->flags); //save this lapic info in the array defined in apic.c
-            printf("LAPIC: cpuid %d - lapic id %d\n", lapic->acpi_cpu_id, lapic->apic_id);
+            //printf("LAPIC: cpuid %d - lapic id %d\n", lapic->acpi_cpu_id, lapic->apic_id);
             break;
 
         //defines an i/o apic
         case io_apic:
             acpi_madt_entry_io_apic *ioapic = (acpi_madt_entry_io_apic *) entry;
             save_ioapic_info(ioapic->io_apic_id, ioapic->io_apic_addr, ioapic->global_system_interrupt_base); //save this ioapic info in the array defined in apic.c
-            printf("IOAPIC: 0x%X - gsi base %d - id %d\n", ioapic->io_apic_addr, ioapic->global_system_interrupt_base, ioapic->io_apic_id);
+            //printf("IOAPIC: 0x%X - gsi base %d - id %d\n", ioapic->io_apic_addr, ioapic->global_system_interrupt_base, ioapic->io_apic_id);
             break;
 
         //defines an i/o interrupt map to the gsi
@@ -127,13 +127,13 @@ void switch_madt_entry(void *entry, acpi_madt_entry_type type) {
             acpi_madt_entry_io_source_override *io_source_override = (acpi_madt_entry_io_source_override *) entry;
             extern uint8_t gsi_map[]; //defined in int.c
             gsi_map[io_source_override->irq_source] = io_source_override->global_system_interrupt;
-            printf("ioapic int map %d -> %d\n", io_source_override->irq_source, io_source_override->global_system_interrupt);
+            //printf("ioapic int map %d -> %d\n", io_source_override->irq_source, io_source_override->global_system_interrupt);
             break;
 
         //defines an i/o apic source that should me marked as non-maskable
         case ioapic_nmi:
             acpi_madt_entry_nmi_source *nmi_source = (acpi_madt_entry_nmi_source *) entry;
-            printf("ioapic non-maskable -> irq: %d, int: %d [UNHANDLED]\n", nmi_source->nmi_source, nmi_source->global_system_interrupt);
+            //printf("ioapic non-maskable -> irq: %d, int: %d [UNHANDLED]\n", nmi_source->nmi_source, nmi_source->global_system_interrupt);
             //......
             break;
 

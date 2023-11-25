@@ -131,22 +131,44 @@ bool pci_tree_install_bus(pci_tree_bus_t *primary, pci_tree_bus_t *secondary, pc
     return true;
 }
 
+inline void pci_tree_print_indent(uint8_t indent) {
+    for (uint8_t i = 0; i < indent; i++) {
+        printf("    ");
+    }
+}
+
 void pci_tree_print(void) {
-    if (!pci_tree_root->devs) {
+    pci_tree_print_bus(pci_tree_root, 0);
+}
+
+void pci_tree_print_bus(pci_tree_bus_t *bus, uint8_t indent) {
+    if (!bus->devs) {
+        pci_tree_print_indent(indent);
         printf("no devices\n");
         return;
     }
 
-    pci_tree_device_t *device = pci_tree_root->devs;
+    pci_tree_print_indent(indent);
+    printf("BUS #%d\n", bus->id);
+    pci_tree_device_t *device = bus->devs;
 
     do {
-        printf("(CC %d, SC %d)\n", device->dev->header.class_code, device->dev->header.subclass);
+        pci_tree_print_indent(indent);
+        printf("CC %d, SC %d, INT%c#\n",
+            device->dev->header.class_code,
+            device->dev->header.subclass,
+            device->dev->int_pin != 0 ? 'A' - 1 + device->dev->int_pin : 'F');
         device = device->next;
     } while (device);
 
-    if (pci_tree_root->bridges) {
-        printf("further buses\n");
-    } else {
-        printf("no subordinate buses\n");
+    if (!bus->bridges) {
+        return;
     }
+
+    pci_tree_bridge_t *bridge = bus->bridges;
+
+    do {
+        pci_tree_print_bus(bridge->secondary, indent + 1);
+        bridge = bridge->next;
+    } while (bridge);
 }

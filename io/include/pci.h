@@ -116,3 +116,5 @@ void pci_ptp_bridge_reverse_endianess(pci_pci_bridge_t *dev);
 bool pci_config_read_entry(uint8_t bus, uint8_t dev, uint8_t fnc, pci_device_t *out);
 void enum_pci();
 void pci_scan_dev(uint8_t bus, uint8_t dev);
+uint32_t pci_read_capability_register(pci_general_dev_t *dev, uint8_t reg);
+bool pci_init_device(pci_general_dev_t *dev);

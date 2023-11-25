@@ -13,27 +13,6 @@ extern pool_t pci_dev_pool_id;          //defined in pci.c
 extern uint32_t pci_dev_pool_last_ind;  //defined in pci.c
 extern pci_tree_bus_t *pci_tree_root;   //defined in pci_tree.c
 
-/* read a device descriptor from the pcie memory configuration space */
-/*bool pcie_config_read_entry(void *conf_base, uint8_t bus, uint8_t dev, uint8_t fnc, pci_device_t *out) {
-    pci_device_t *obj = (pci_device_t *)(conf_base + (((uint64_t) bus << 20) | ((uint64_t) dev << 15) | ((uint64_t) fnc << 12)));
-
-    memcpy(out, obj, sizeof(pci_device_t));
-
-    if ((obj->general.header.header_type & 0x7F) == general_device) {
-        pci_general_device_reverse_endianess(&out->general);
-    } else if ((obj->general.header.header_type & 0x7F) == pci_to_pci_bridge) {
-        pci_ptp_bridge_reverse_endianess(&out->bridge);
-    } else {
-        return false;
-    }
-
-    if (out->general.header.vendor_id == 0xFFFF) {
-        return false;
-    }
-
-    return true;
-}*/
-
 /* enumerate devices using pcie configuration mechanism */
 bool enum_pcie() {
     acpi_mcfg_t *mcfg;
@@ -81,6 +60,7 @@ bool pcie_scan_device(void *config_base, uint8_t bus, uint8_t dev) {
 
         if (type == general_device) {
             pci_general_dev_t *dev = &device->general;
+            if (!pci_init_device(dev)) {return false;}
             pci_tree_device_t *new_device = pci_tree_create_device(dev, current);          //create a new device node object
 
             if (!pci_tree_install_device(new_device, current)) {                           //installs it into the pci tree

@@ -14,10 +14,17 @@ this array is the internal representation of characters (printable and control),
 keyboard drivers must convert their scancodes into these codes to be passed to keypressed().
 */
 const char keyboard_codes[] = {
-    KEYCODE_ESCAPE, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', KEYCODE_BACKSPACE, KEYCODE_TAB, 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o',
-    'p', '[', ']', KEYCODE_LINE_FEED, KEYCODE_LCTRL_DOWN, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '\'', KEYCODE_LSHIFT_DOWN, '\\', 'z', 'x', 'c',
-    'v', 'b', 'n', 'm', ',', '.', '/', KEYCODE_RSHIFT_DOWN, '*', KEYCODE_ALT_DOWN, ' ', KEYCODE_CAPS_LOCK, '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3',
+    KEYCODE_ESCAPE, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '\'', 'i', KEYCODE_BACKSPACE, KEYCODE_TAB, 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o',
+    'p', 'e', '+', KEYCODE_LINE_FEED, KEYCODE_LCTRL_DOWN, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'o', 'a', 'u', KEYCODE_LSHIFT_DOWN, '<', 'z', 'x', 'c',
+    'v', 'b', 'n', 'm', ',', '.', '-', KEYCODE_RSHIFT_DOWN, '*', KEYCODE_ALT_DOWN, ' ', KEYCODE_CAPS_LOCK, '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3',
     '0', '.', KEYCODE_LCTRL_UP, KEYCODE_LSHIFT_UP, KEYCODE_RSHIFT_UP, KEYCODE_ALT_UP
+};
+
+const char keyboard_shift_codes[] = {
+    0, '!', '\"', 0, '$', '%', '&', '/', '(', ')', '=', '?', '^', 0, 0, 'Q', 'W', 'E', 'R', 'T', 'Y', 'O',
+    'P', 'e', '*', 0, 0, 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'C', 0, 0, 0, '>', 'Z', 'X', 'C',
+    'V', 'B', 'N', 'M', ';', ':', '_', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0
 };
 
 /* initialize keyboard input subsystem */

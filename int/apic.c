@@ -103,12 +103,12 @@ bool check_apic_addresses() {
         ioapic_t *ioapic = &system_ioapics[i];
         void *ioapic_address = (void *)(uint64_t) ioapic->ioapic_addr;
 
-        if (ioapic_address) {
-            if (get_physical_address(ioapic_address) != ioapic_address) {
-                return false;
-            }
-        } else {
+        if (!ioapic_address) {
             continue;
+        }
+
+        if (get_physical_address(ioapic_address) != ioapic_address) {
+            return false;
         }
     }
 
