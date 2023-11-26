@@ -58,11 +58,20 @@ typedef enum {
     disk_reader
 } ide_device_type_t;
 
+typedef enum {
+    ide_pata,
+    ide_sata,
+    ide_patapi,
+    ide_satapi,
+    ide_unknown
+} ide_type_t;
+
 typedef struct {
     ide_addressing_mode_t addr_mode;
     uint64_t sectors;
     bool exist;
-    ide_device_type_t type;
+    ide_device_type_t device_type;
+    ide_type_t ide_type;
 } ide_device_t;
 
 typedef struct {
@@ -75,14 +84,22 @@ typedef struct {
 
 typedef struct {
     pci_general_dev_t *pci_dev;
-    ide_bus_t primary; //bars 0 and 1
-    ide_bus_t secondary; //bars 2 and 3
-    uint32_t bus_master; //bar4
+    ide_bus_t primary;     //bars 0 and 1
+    ide_bus_t secondary;   //bars 2 and 3
+    uint32_t bus_master;   //bar4
+    bool dma_enabled;
 } ide_controller_t;
+
+typedef struct {
+    uint32_t addr;        //physical address
+    uint16_t size;        //byte count (size = 0 means 64k)
+    uint16_t reserved;
+} ide_prd_t;
 
 bool ide_init(pci_general_dev_t *dev);
 void ide_save_device_info(ide_device_t *dev, uint16_t *info);
 bool ide_identify_drive(ide_bus_t *bus, ide_drive_select_t drive, void *info);
+void ide_save_device_ide_type(ide_bus_t *bus, ide_drive_select_t select);
 bool ide_set_channels_mode(pci_general_dev_t *dev);
 void ide_wait(ide_bus_t *bus);
 void ide_poll(ide_bus_t *bus);

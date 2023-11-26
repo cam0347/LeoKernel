@@ -20,6 +20,7 @@
 #include <include/sleep.h>
 #include <tty/include/term.h>
 #include <drv/ide/include/ide_interface.h>
+#include <mm/include/kmalloc.h>
 
 void kmain(struct leokernel_boot_params bootp) {
     //if the boot parameters are null, halt the cpu

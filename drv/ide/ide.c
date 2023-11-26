@@ -23,6 +23,8 @@ bar4: bus master (16)
 Addressing modes: LBA28, LBA48, CHS
 Reading modes: PIO, single word DMA, double word DMA, ultra DMA
 Polling modes: IRQ, polling status
+
+** THIS DRIVER USES STATUS POLLING, DMA IS CURRENTLY UNSUPPORTED **
 */
 
 #include <io/include/pci.h>
@@ -32,6 +34,7 @@ Polling modes: IRQ, polling status
 #include <io/include/devs.h>
 #include <mm/include/kmalloc.h>
 #include <include/mem.h>
+#include <mm/include/memory_manager.h>
 
 pool_t ide_controllers_pool_id;
 uint8_t ide_controllers_pool_last_ind = 0;
@@ -50,9 +53,10 @@ bool ide_init(pci_general_dev_t *dev) {
     }
 
     uint32_t bar0 = dev->bar0 & 0xFFFFFFFC;
-    uint32_t bar1 = dev->bar0 & 0xFFFFFFFC;
-    uint32_t bar2 = dev->bar0 & 0xFFFFFFFC;
-    uint32_t bar3 = dev->bar0 & 0xFFFFFFFC;
+    uint32_t bar1 = dev->bar1 & 0xFFFFFFFC;
+    uint32_t bar2 = dev->bar2 & 0xFFFFFFFC;
+    uint32_t bar3 = dev->bar3 & 0xFFFFFFFC;
+    uint32_t bar4 = dev->bar4 & 0xFFFFFFFC;
 
     bar0 = bar0 ? bar0 : 0x1F0; //primary bus io
     bar1 = bar1 ? bar1 : 0x3F6; //primary bus control
@@ -77,8 +81,26 @@ bool ide_init(pci_general_dev_t *dev) {
             .io = bar2,
             .control = bar3,
             .selected = master
-        }
+        },
+
+        .dma_enabled = (bool)(dev->header.prog_if >> 7 & 1)
     };
+
+    if (ctrl.dma_enabled) {
+        void *prdt_primary, *prdt_secondary;
+
+        //if the prdts memory can't be allocated, disable dma on this controller
+        if ((prdt_primary = kalloc_page(1)) && (prdt_secondary = kalloc_page(1))) {
+            ctrl.bus_master = bar4;
+            outl(ctrl.bus_master + 4, (uint64_t) prdt_primary >> 32 & 0xFFFFFFFF); //write primary bus prdt address
+            outl(ctrl.bus_master + 0x0C, (uint64_t) prdt_secondary >> 32 & 0xFFFFFFFF); //write secondary bus prdt address
+        } else {
+            kfree_page(prdt_primary);
+            kfree_page(prdt_secondary);
+            ctrl.bus_master = 0;
+            ctrl.dma_enabled = false;
+        }
+    }
 
     //test drives individually
     void *disk_info;
@@ -87,33 +109,37 @@ bool ide_init(pci_general_dev_t *dev) {
         return false;
     }
 
-    //primary bus, slave drive
-    memclear(disk_info, 512);
-    if (ide_identify_drive(&ctrl.primary, slave, disk_info)) {
-        ctrl.primary.selected = slave;
-        ide_save_device_info(&ctrl.primary.slave, disk_info);
-    }
-
     //primary bus, master drive
     memclear(disk_info, 512);
     if (ide_identify_drive(&ctrl.primary, master, disk_info)) {
-        ctrl.primary.selected = master;
         ide_save_device_info(&ctrl.primary.master, disk_info);
+        ide_save_device_ide_type(&ctrl.primary, master);
     }
 
-    //secondary bus, slave drive
+    //primary bus, slave drive
     memclear(disk_info, 512);
-    if (ide_identify_drive(&ctrl.secondary, slave, disk_info)) {
-        ctrl.secondary.selected = slave;
-        ide_save_device_info(&ctrl.secondary.slave, disk_info);
+    if (ide_identify_drive(&ctrl.primary, slave, disk_info)) {
+        ide_save_device_info(&ctrl.primary.slave, disk_info);
+        ide_save_device_ide_type(&ctrl.primary, slave);
     }
 
     //secondary bus, master drive
     memclear(disk_info, 512);
     if (ide_identify_drive(&ctrl.secondary, master, disk_info)) {
-        ctrl.secondary.selected = master;
         ide_save_device_info(&ctrl.secondary.master, disk_info);
+        ide_save_device_ide_type(&ctrl.secondary, master);
     }
+
+    //secondary bus, slave drive
+    memclear(disk_info, 512);
+    if (ide_identify_drive(&ctrl.secondary, slave, disk_info)) {
+        ide_save_device_info(&ctrl.secondary.slave, disk_info);
+        ide_save_device_ide_type(&ctrl.secondary, slave);
+    }
+
+    //save selected drives
+    ctrl.primary.selected = (uint8_t) ide_read(ctrl.primary.io, IDE_BAR_OFFSET_DRIVE_HEAD) & 0xB0;
+    ctrl.secondary.selected = (uint8_t) ide_read(ctrl.secondary.io, IDE_BAR_OFFSET_DRIVE_HEAD) & 0xB0;
 
     //save this controller's info into the ide disks pool (created during pci initialization)
     return obj_pool_put(ide_controllers_pool_id, (void *) &ctrl, ide_controllers_pool_last_ind++);
@@ -145,7 +171,7 @@ void ide_save_device_info(ide_device_t *dev, uint16_t *info) {
         dev->sectors = lba48_sectors;
     }
 
-    dev->type = hard_disk; //u sure about this?
+    dev->device_type = hard_disk; //u sure about this?
 }
 
 /*
@@ -173,10 +199,11 @@ bool ide_identify_drive(ide_bus_t *bus, ide_drive_select_t drive, void *info) {
 
     while(ide_status(bus) >> 7 & 1); //waits for the busy bit (7th) clears
 
+    /* this was commented because it returned false if the drive wasn't a pata drive */
     /* if LBAmid or LBAhi are not 0, this is not an ATA drive, return false */
-    if (ide_read(bus->io, IDE_BAR_OFFSET_LBA_MID) != 0 || ide_read(bus->io, IDE_BAR_OFFSET_LBA_HI) != 0) {
+    /*if (ide_read(bus->io, IDE_BAR_OFFSET_LBA_MID) != 0 || ide_read(bus->io, IDE_BAR_OFFSET_LBA_HI) != 0) {
         return false;
-    }
+    }*/
 
     /* waits for DRQ or ERR bit to set */
     while(!(ide_status(bus) >> 3 & 1) && !(ide_status(bus) & 1));
@@ -187,6 +214,29 @@ bool ide_identify_drive(ide_bus_t *bus, ide_drive_select_t drive, void *info) {
     }
 
     return true;
+}
+
+/* resets the bus and save the device ide type */
+void ide_save_device_ide_type(ide_bus_t *bus, ide_drive_select_t select) {
+    ide_device_t *drive = select == master ? &bus->master : &bus->slave;
+
+    ide_reset(bus);
+    ide_wait(bus);
+    ide_select_drive(bus, select);
+    uint8_t cl = ide_read(bus->io, IDE_BAR_OFFSET_LBA_MID);
+    uint8_t ch = ide_read(bus->io, IDE_BAR_OFFSET_LBA_HI);
+
+    if (cl == 0x14 && ch == 0xEB) {
+        drive->ide_type = ide_patapi;
+    } else if (cl == 0x69 && ch == 0x96) {
+        drive->ide_type = ide_satapi;
+    } else if (cl == 0x00 && ch == 0x00) {
+        drive->ide_type = ide_pata;
+    } else if (cl == 0x3C && ch == 0xC3) {
+        drive->ide_type = ide_sata;
+    } else {
+        drive->ide_type = ide_unknown;
+    }
 }
 
 bool ide_set_channels_mode(pci_general_dev_t *dev) {
@@ -249,8 +299,7 @@ In the case of a CHS addressing mode, the format of the address parameter is:
     - byte 2: cylinder high
     - byte 3: head (actually a nybble)
 
-In the case of a LBA28/LBA48 addressing mode, the address parameter
-is the LBA address.
+In the case of a LBA28/LBA48 addressing mode, the address parameter is the LBA address.
 */
 bool ide_init_transaction(ide_bus_t *bus, uint64_t address, uint16_t sectors) {
     if (!bus || sectors == 0) {
@@ -277,16 +326,16 @@ bool ide_init_transaction(ide_bus_t *bus, uint64_t address, uint16_t sectors) {
             break;
 
         case lba28:
-            selection = bus->selected | (1 << 6) | (address >> 24 & 0x0F);         //drive select (0xE0 or 0xF0 and highest 4 bits of LBA28 address)
+            selection = bus->selected | (1 << 6) | (address >> 24 & 0x0F);         //drive select and highest 4 bits of LBA28 address
             ide_write(bus->io, IDE_BAR_OFFSET_DRIVE_HEAD, selection);
-            ide_write(bus->io, IDE_BAR_OFFSET_SECTOR_COUNT, sectors);              //sector number
+            ide_write(bus->io, IDE_BAR_OFFSET_SECTOR_COUNT, (uint8_t) sectors);    //sector number
             ide_write(bus->io, IDE_BAR_OFFSET_LBA_LO, address & 0xFF);             //LBA28 low (byte 0)
             ide_write(bus->io, IDE_BAR_OFFSET_LBA_MID, address >> 8 & 0xFF);       //LBA28 mid (byte 1)
             ide_write(bus->io, IDE_BAR_OFFSET_LBA_HI, address >> 16 & 0xFF);       //LBA28 (byte 2)
             break;
 
         case lba48:
-            ide_write(bus->io, IDE_BAR_OFFSET_DRIVE_HEAD, bus->selected | (1 << 6));
+            ide_write(bus->io, IDE_BAR_OFFSET_DRIVE_HEAD, (uint8_t)(bus->selected | (1 << 6)));
             ide_write(bus->io, IDE_BAR_OFFSET_SECTOR_COUNT, sectors >> 8 & 0xFF);  //sector count high (byte 1)
             ide_write(bus->io, IDE_BAR_OFFSET_LBA_LO, address >> 24 & 0xFF);       //LBA48 byte 3
             ide_write(bus->io, IDE_BAR_OFFSET_LBA_MID, address >> 32 & 0xFF);      //LBA48 byte 4
@@ -305,8 +354,9 @@ bool ide_init_transaction(ide_bus_t *bus, uint64_t address, uint16_t sectors) {
 }
 
 /*
-reads n sectors from the selected drive of the bus specified in the parameter.
-note that the right drive must be previously selected before calling this function.
+commands a drive to read a certain amount of sectors.
+this function implements both standard and packet interface communication modes.
+note that this function expects the right drive to be selected.
 */
 bool ide_read_data(ide_bus_t *bus, uint64_t address, uint16_t sectors, void *data) {
     if (!bus || !data) {
@@ -321,21 +371,27 @@ bool ide_read_data(ide_bus_t *bus, uint64_t address, uint16_t sectors, void *dat
     //get selected drive
     ide_device_t *selected = bus->selected == master ? &bus->master : &bus->slave;
 
+    //packet interface not supported yet
+    if (selected->ide_type != ide_pata && selected->ide_type != ide_sata) {
+        return false;
+    }
+
     if (selected->addr_mode == lba28 || selected->addr_mode == chs) {
         ide_command(bus, IDE_COMM_READ_PIO);
     } else if (selected->addr_mode == lba48) {
         ide_command(bus, IDE_COMM_READ_PIO_EXT);
     } else {
-        return false;
+        return false; //unknwon addressing mode
     }
 
+    //iterate through the sectors and read each word
     for (uint32_t i = 0; i < sectors * 256; i++) {
         ide_poll(bus); //waits
 
         if (ide_check_error(bus)) {
             return false;
         }
-        
+
         *((uint16_t *) data + i) = ide_read(bus->io, IDE_BAR_OFFSET_DATA_REG);
     }
 
@@ -343,8 +399,9 @@ bool ide_read_data(ide_bus_t *bus, uint64_t address, uint16_t sectors, void *dat
 }
 
 /*
-writes n sectors from to the selected drive of the bus specified in the parameter.
-note that the right drive must be previously selected before calling this function.
+commands a drive to write a certain amount of sectors.
+this function implements both standard and packet interface communication modes.
+note that this function expects the right drive to be selected.
 */
 bool ide_write_data(ide_bus_t *bus, uint64_t address, uint16_t sectors, void *data) {
     if (!bus || !data) {
@@ -358,27 +415,27 @@ bool ide_write_data(ide_bus_t *bus, uint64_t address, uint16_t sectors, void *da
 
     //get selected drive
     ide_device_t *selected = bus->selected == master ? &bus->master : &bus->slave;
-    bool extended;
+    uint8_t flush_command;
+
+    //packet interface not supported yet
+    if (selected->ide_type != ide_pata && selected->ide_type != ide_sata) {
+        return false;
+    }
 
     if (selected->addr_mode == lba28 || selected->addr_mode == chs) {
         ide_command(bus, IDE_COMM_WRITE_PIO);
-        extended = false;
+        flush_command = IDE_COMM_CACHE_FLUSH;
     } else if (selected->addr_mode == lba48) {
         ide_command(bus, IDE_COMM_WRITE_PIO_EXT);
-        extended = true;
+        flush_command = IDE_COMM_CACHE_FLUSH_EXT;
     } else {
-        return false;
+        return false; //unknown addressing mode
     }
 
     for (uint16_t i = 0; i < sectors * 256; i++) {
         ide_poll(bus); //waits
         ide_write(bus->io, IDE_BAR_OFFSET_DATA_REG, *((uint16_t *) data + i));
-
-        if (extended) {
-            ide_command(bus, IDE_COMM_CACHE_FLUSH_EXT);
-        } else {
-            ide_command(bus, IDE_COMM_CACHE_FLUSH);
-        }
+        ide_command(bus, flush_command);
 
         if (i == sectors - 1) {
             ide_wait(bus);
