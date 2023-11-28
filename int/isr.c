@@ -41,7 +41,8 @@ uint64_t isrs[256] = {
     (uint64_t) int_06, (uint64_t) int_07, (uint64_t) int_08, (uint64_t) int_09, (uint64_t) int_0A, (uint64_t) int_0B,
     (uint64_t) int_0C, (uint64_t) int_0D, (uint64_t) int_0E, (uint64_t) int_0F, (uint64_t) int_10, (uint64_t) int_11,
     (uint64_t) int_12, (uint64_t) int_13, (uint64_t) int_14, (uint64_t) int_15, (uint64_t) int_16, (uint64_t) irq0,
-    (uint64_t) irq1, (uint64_t) irq2
+    (uint64_t) irq1, (uint64_t) irq2, null, null, null, null, null, null, null, null, null, null, null, (uint64_t) irq14,
+    (uint64_t) irq15
 };
 
 void print_int_frame(struct x64_int_frame *frame) {
@@ -326,3 +327,24 @@ void irq7();
 void irq8();
 void irq9();
 void irq10();
+void irq11();
+void irq12();
+void irq13();
+
+//primary IDE bus
+__attribute__((interrupt))
+void irq14(struct x64_int_frame *frame) {
+    printf("primary ide irq fired\n");
+    int_exec_hooks(37);
+    enable_int();
+    send_eoi();
+}
+
+//secondary IDE bus
+__attribute__((interrupt))
+void irq15(struct x64_int_frame *frame) {
+    printf("secondary ide irq fired\n");
+    int_exec_hooks(38);
+    enable_int();
+    send_eoi();
+}

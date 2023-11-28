@@ -8,7 +8,7 @@ For each type of peripheral there's a function.
 #include <io/include/pci.h>
 
 /* drivers */
-#include <drv/ide/include/ide.h>
+#include <drv/ide/include/ide_setup.h>
 
 /* configure a mass storage device based on its type */
 bool devs_config_mass_storage(pci_general_dev_t *dev) {

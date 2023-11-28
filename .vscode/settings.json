@@ -7,6 +7,8 @@
         "pit.h": "c",
         "term.h": "c",
         "pci.h": "c",
-        "devs.h": "c"
+        "devs.h": "c",
+        "ide.h": "c",
+        "ide_io.h": "c"
     }
 }
