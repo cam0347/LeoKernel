@@ -1,30 +1,7 @@
 /*
-(P)ATA (also referred to IDE) is a standard interface for mass storage devices.
-PATA is the original one, parallel communcation, SATA uses serial communication.
-An IDE cable can link up to 2 drives directly to the motherboard, those two drives
-are called master and slave (although they're at the same level).
-On a motherboard there are two slots, the primary and the secondary, which can support two
-drives each.
-The default communication method with ATA devices is through port I/O (ATA PIO).
-This driver handles (P)ATA PIO mode and packet interface (PI) and their IDE DMA.
-IDE drives can run in native or compatibility mode, this driver supports only native mode.
-
-Bars of a ide controller:
-primary channel:
-bar0: pci native mode (8)
-bar1: control port (4)
-
-secondary channel:
-bar2: native mode (8)
-bar3: control port (4)
-
-bar4: bus master (16)
-
-Addressing modes: LBA28, LBA48, CHS
-Reading modes: PIO, single word DMA, double word DMA, ultra DMA
-Polling modes: IRQ, polling status
-
-** THIS DRIVER USES STATUS POLLING, DMA IS CURRENTLY UNSUPPORTED **
+(P)ATA controller driver.
+This driver uses port I/O and the DMA transfer is currently being developed.
+This driver uses status polling (no interrupts).
 */
 
 #include <include/types.h>
@@ -43,9 +20,8 @@ pool_t ide_controllers_pool_id;
 uint8_t ide_controllers_pool_last_ind = 0;
 uint8_t ide_drives_last_ind = 0;
 
-/* checks and initialize master and slave drives (if any) for each bus of an ide controller */
+/* initializes an ide controller and adds it to the pool */
 bool ide_init(pci_general_dev_t *dev) {
-    //checks if this is an actual IDE controller (class code 1, subclass 1)
     if (!dev || (pci_dev_type_t) dev->header.class_code != mass_storage || (mass_storage_subclass_t) dev->header.subclass != ide) {
         return false;
     }
@@ -88,7 +64,7 @@ bool ide_init(pci_general_dev_t *dev) {
             .ctrl = &ctrl
         },
 
-        .dma_enabled = (bool)(dev->header.prog_if >> 7 & 1),
+        .dma_enabled = (bool)(dev->header.prog_if >> 7 & 1)
     };
 
     if (ctrl.dma_enabled) {
@@ -150,35 +126,6 @@ bool ide_init(pci_general_dev_t *dev) {
     return obj_pool_put(ide_controllers_pool_id, (void *) &ctrl, ide_controllers_pool_last_ind++);
 }
 
-/* save in the ide_device_t struct the informations returned by the IDENTIFY command */
-void ide_save_device_info(ide_device_t *dev, uint16_t *info) {
-    if (!dev) {
-        return;
-    }
-
-    dev->exist = true;
-    dev->addr_mode = chs; //default addressing mode
-
-    if (*(info + 83) >> 10 & 1) {
-        dev->addr_mode = lba48;
-    }
-
-    uint32_t lba28_sectors = *(uint32_t *)(info + 60);
-    uint64_t lba48_sectors = *(uint64_t *)(info + 100);
-
-    if (lba28_sectors != 0) {
-        dev->addr_mode = lba28;
-        dev->sectors = lba28_sectors;
-    }
-
-    if (lba48_sectors != 0) {
-        dev->addr_mode = lba48;
-        dev->sectors = lba48_sectors;
-    }
-
-    dev->device_type = hard_disk; //u sure about this?
-}
-
 /*
 Send IDENTIFY command and retrieve some informations.
 This function is used to determine whether a specific drive exists or not.
@@ -219,6 +166,35 @@ bool ide_identify_drive(ide_bus_t *bus, ide_drive_select_t drive, void *info) {
     }
 
     return true;
+}
+
+/* save in the ide_device_t struct the informations returned by the ide_identify_drive */
+void ide_save_device_info(ide_device_t *dev, uint16_t *info) {
+    if (!dev) {
+        return;
+    }
+
+    dev->exist = true;
+    dev->addr_mode = chs; //default addressing mode
+
+    if (*(info + 83) >> 10 & 1) {
+        dev->addr_mode = lba48;
+    }
+
+    uint32_t lba28_sectors = *(uint32_t *)(info + 60);
+    uint64_t lba48_sectors = *(uint64_t *)(info + 100);
+
+    if (lba28_sectors != 0) {
+        dev->addr_mode = lba28;
+        dev->sectors = lba28_sectors;
+    }
+
+    if (lba48_sectors != 0) {
+        dev->addr_mode = lba48;
+        dev->sectors = lba48_sectors;
+    }
+
+    dev->device_type = hard_disk; //u sure about this?
 }
 
 /* resets the bus and save the device ide type */

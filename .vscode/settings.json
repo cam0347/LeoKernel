@@ -9,6 +9,9 @@
         "pci.h": "c",
         "devs.h": "c",
         "ide.h": "c",
-        "ide_io.h": "c"
+        "ide_io.h": "c",
+        "pcie.h": "c",
+        "acpi.h": "c",
+        "ahci_setup.h": "c"
     }
 }

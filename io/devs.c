@@ -9,6 +9,7 @@ For each type of peripheral there's a function.
 
 /* drivers */
 #include <drv/ide/include/ide_setup.h>
+#include <drv/ahci/include/ahci_setup.h>
 
 /* configure a mass storage device based on its type */
 bool devs_config_mass_storage(pci_general_dev_t *dev) {
@@ -25,6 +26,7 @@ bool devs_config_mass_storage(pci_general_dev_t *dev) {
             break;
 
         case sata:
+            return ahci_init(dev);
             break;
 
         case nvm:

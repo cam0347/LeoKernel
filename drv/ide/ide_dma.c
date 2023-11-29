@@ -1,5 +1,5 @@
-#include <drv/ide/include/ide_io.h>
 #include <drv/ide/include/ide_dma.h>
+#include <drv/ide/include/ide_io.h>
 #include <include/types.h>
 #include <mm/include/memory_manager.h>
 #include <io/include/port_io.h>

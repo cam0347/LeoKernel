@@ -14,15 +14,18 @@ void ide_poll(ide_bus_t *bus) {
     while(((ide_status(bus) >> 7 & 1) || !(ide_status(bus) >> 3 & 1)) && !ide_check_error(bus));
 }
 
+/* if the status bit 0 or 5 are set that means there's an error */
 bool ide_check_error(ide_bus_t *bus) {
     uint8_t status = ide_status(bus);
     return (status & 1) || (status >> 5 & 1);
 }
 
+/* read a register */
 uint16_t ide_read(uint32_t bar, uint8_t reg) {
     return inw(bar + reg);
 }
 
+/* write a register */
 void ide_write(uint32_t bar, uint8_t reg, uint16_t data) {
     outw(bar + reg, data);
 }

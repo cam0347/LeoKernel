@@ -1,11 +1,8 @@
-#include <io/include/pci.h>
 #include <io/include/pcie.h>
-#include <io/include/pci_tree.h>
 #include <include/types.h>
-#include <io/include/port_io.h>
-#include <include/mem.h>
-#include <acpi/include/acpi.h>
 #include <mm/include/obj_alloc.h>
+#include <io/include/pci_tree.h>
+#include <acpi/include/acpi.h>
 #include <acpi/include/acpi_parser.h>
 #include <include/assert.h>
 
@@ -21,6 +18,14 @@ bool enum_pcie() {
         return false;
     }
 
+    return pcie_iterate_mcfg(mcfg);
+}
+
+bool pcie_iterate_mcfg(acpi_mcfg_t *mcfg) {
+    if (!mcfg) {
+        return false;
+    }
+
     uint32_t n_entries = (mcfg->h.length - sizeof(acpi_table_header) - 8) / sizeof(acpi_mcfg_entry_t);
 
     for (uint32_t i = 0; i < n_entries; i++) {
@@ -30,8 +35,6 @@ bool enum_pcie() {
             return false;
         }
     }
-
-    return true;
 }
 
 bool pcie_scan_bus(void *config_base, uint8_t bus) {
@@ -76,7 +79,7 @@ bool pcie_scan_device(void *config_base, uint8_t bus, uint8_t dev) {
 
             pcie_scan_bus(config_base, bridge->secondary_bus_number);                      //recursively scan the newly discovered bus
         } else {
-            return true;                                                                   //unsupported header type
+            continue;                                                                      //unsupported header type
         }
 
         bool multifunction = device->general.header.header_type >> 7;                      //msb of header type set if this is a multifunction device
