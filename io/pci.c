@@ -8,7 +8,7 @@
 #include <io/include/pci_tree.h>
 
 bool pcie_supported = false;
-extern pool_t ide_controllers_pool_id; //defined in ide_setup.c
+extern pool_t ide_devices_pool_id; //defined in ide_setup.c
 extern pool_t ahci_controllers_pool_id; //defined in ahci_setup.c
 
 bool init_pci() {
@@ -17,7 +17,7 @@ bool init_pci() {
     }
 
     //create some pools
-    if (!create_obj_pool(&ide_controllers_pool_id, sizeof(ide_controller_t), 8, manual)) {return false;}
+    if (!create_obj_pool(&ide_devices_pool_id, sizeof(ide_device_t), 16, manual)) {return false;}
     if (!create_obj_pool(&ahci_controllers_pool_id, sizeof(ahci_controller_t), 8, manual)) {return false;}
 
     return enum_pcie();

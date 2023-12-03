@@ -19,7 +19,7 @@
 #include <mm/include/obj_alloc.h>
 #include <include/sleep.h>
 #include <tty/include/term.h>
-#include <drv/ide/include/ide_interface.h>
+//#include <drv/ide/include/ide_interface.h>
 #include <mm/include/kmalloc.h>
 
 void kmain(struct leokernel_boot_params bootp) {
@@ -83,9 +83,14 @@ void kmain(struct leokernel_boot_params bootp) {
         fail("error configuring PCI and PCIe");
     }
 
-    pci_tree_print();
+    if (ide_test()) {
+        printf("test succeded\n");
+    } else {
+        printf("test failed\n");
+    }
 
-    //sys_hlt();
+    pci_tree_print();
+    sys_hlt();
 
     /* initialize file handling */
     if (!init_files()) {

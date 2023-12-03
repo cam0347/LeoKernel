@@ -121,9 +121,9 @@ void int_05(struct x64_int_frame *frame) {
 
 __attribute__((interrupt))
 void int_06(struct x64_int_frame *frame) {
-    printf("Invalid opcode\n");
     print_int_frame(frame);
     int_exec_hooks(6);
+    panic("invalid opcode");
     sys_hlt();
 }
 
@@ -194,6 +194,7 @@ void int_0D(struct x64_int_frame *frame, uint64_t error) {
     }
 
     int_exec_hooks(13);
+    panic("general protection fault");
     sys_hlt();
 }
 

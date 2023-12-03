@@ -1,181 +1,176 @@
 /*
-(P)ATA controller driver.
-This driver uses port I/O and the DMA transfer is currently being developed.
-This driver uses status polling (no interrupts).
+IDE driver.
+This file contains the functions to initialize the IDE devices found
+in this system and save their data in a structured manner.
 */
 
 #include <include/types.h>
-#include <drv/ide/include/ide_setup.h>
-#include <mm/include/obj_alloc.h>
-#include <io/include/pci.h>
 #include <drv/ide/include/ide.h>
-#include <drv/ide/include/ide_io.h>
-#include <io/include/devs.h>
+#include <drv/ide/include/ide_setup.h>
+#include <io/include/pci.h>
+#include <mm/include/obj_alloc.h>
 #include <mm/include/kmalloc.h>
-#include <mm/include/memory_manager.h>
-#include <io/include/port_io.h>
 #include <include/mem.h>
+#include <io/include/devs.h>
 
-pool_t ide_controllers_pool_id;
-uint8_t ide_controllers_pool_last_ind = 0;
-uint8_t ide_drives_last_ind = 0;
+pool_t ide_devices_pool_id;
+uint16_t ide_devices_pool_last_ind = 0;
 
-/* initializes an ide controller and adds it to the pool */
-bool ide_init(pci_general_dev_t *dev) {
-    if (!dev || (pci_dev_type_t) dev->header.class_code != mass_storage || (mass_storage_subclass_t) dev->header.subclass != ide) {
+/*
+Given the PCI device, this function search and initialize every drive, and then it saves
+them into the pool created by pci_init().
+*/
+bool ide_init(pci_general_dev_t *pci_dev) {
+    if (!pci_dev || (pci_dev_type_t) pci_dev->header.class_code != mass_storage || (mass_storage_subclass_t) pci_dev->header.subclass != ide) {
         return false;
     }
 
-    //set channels to native mode or return if unsupported
-    if (!ide_set_channels_mode(dev)) {
-        return false; //one of the channels doesn't support native mode
+    /* sets both buses to native mode */
+    if (!ide_set_bus_mode(pci_dev, primary, compatibility) || !ide_set_bus_mode(pci_dev, secondary, compatibility)) {
+        return false;
     }
 
-    uint32_t bar0 = dev->bar0 & 0xFFFFFFFC;
-    uint32_t bar1 = dev->bar1 & 0xFFFFFFFC;
-    uint32_t bar2 = dev->bar2 & 0xFFFFFFFC;
-    uint32_t bar3 = dev->bar3 & 0xFFFFFFFC;
-    uint32_t bar4 = dev->bar4 & 0xFFFFFFFC;
+    uint32_t bar0 = pci_dev->bar0 & 0xFFFFFFFC;
+    uint32_t bar1 = pci_dev->bar1 & 0xFFFFFFFC;
+    uint32_t bar2 = pci_dev->bar2 & 0xFFFFFFFC;
+    uint32_t bar3 = pci_dev->bar3 & 0xFFFFFFFC;
+    uint32_t bar4 = pci_dev->bar4 & 0xFFFFFFFC;
 
-    bar0 = bar0 ? bar0 : 0x1F0; //primary bus io
-    bar1 = bar1 ? bar1 : 0x3F6; //primary bus control
-    bar2 = bar2 ? bar2 : 0x170; //secondary bus io
-    bar3 = bar3 ? bar3 : 0x376; //secondary bus control
+    bar0 = bar0 ? bar0 : 0x1F0; //primary, io
+    bar1 = bar1 ? bar1 : 0x3F6; //primary, control
+    bar2 = bar2 ? bar2 : 0x170; //secondary, io
+    bar3 = bar3 ? bar3 : 0x376; //secondary, control
 
-    /*
-    save some initial informations about this controller.
-    further informations will be saved later.
-    by default, the selected drive is the master, even if it doesn't exist,
-    this information will be fixed later
-    */
-    ide_controller_t ctrl = {
-        .pci_dev = dev,
-        .primary = {
-            .io = bar0,
-            .control = bar1,
-            .selected = master,
-            .ctrl = &ctrl
-        },
+    //allocate the bus objects
+    ide_bus_t *primary_bus, *secondary_bus;
 
-        .secondary = {
-            .io = bar2,
-            .control = bar3,
-            .selected = master,
-            .ctrl = &ctrl
-        },
+    if  (!(primary_bus = (ide_bus_t *) kmalloc(sizeof(ide_bus_t))) || !(secondary_bus = (ide_bus_t *) kmalloc(sizeof(ide_bus_t)))) {
+        kfree(primary_bus);
+        kfree(secondary_bus);
+        return false;
+    }
 
-        .dma_enabled = (bool)(dev->header.prog_if >> 7 & 1)
-    };
+    bool dma_enabled = (bool)(pci_dev->header.prog_if >> 7 & 1);
+    ide_prd_t *primary_prdt = null, *secondary_prdt = null;
 
-    if (ctrl.dma_enabled) {
-        void *prdt_primary, *prdt_secondary;
-
-        //if the prdts memory can't be allocated, disable dma on this controller
-        if ((prdt_primary = kalloc_page(IDE_PRDT_PAGES)) && (prdt_secondary = kalloc_page(IDE_PRDT_PAGES))) {
-            ctrl.bus_master = bar4;
-            outl(ctrl.bus_master + 4, (uint64_t) prdt_primary >> 32 & 0xFFFFFFFF); //write primary bus prdt address
-            outl(ctrl.bus_master + 0x0C, (uint64_t) prdt_secondary >> 32 & 0xFFFFFFFF); //write secondary bus prdt address
-        } else {
-            kfree_page(prdt_primary);
-            kfree_page(prdt_secondary);
-            ctrl.bus_master = 0;
-            ctrl.dma_enabled = false;
+    if (dma_enabled) {
+        if  (!(primary_prdt = (ide_prd_t *) kmalloc(sizeof(ide_prd_t))) || !(secondary_prdt = (ide_prd_t *) kmalloc(sizeof(ide_prd_t)))) {
+            kfree(primary_prdt);
+            kfree(secondary_prdt);
+            dma_enabled = false; //if memory for the prdts can't be allocated, disable dma
         }
     }
 
-    //test drives individually
-    void *disk_info;
+    /* initialize bus objects */
+    ide_bus_init(primary_bus, bar0, bar1, dma_enabled, primary_prdt);
+    ide_bus_init(secondary_bus, bar2, bar3, dma_enabled, secondary_prdt);
 
-    if (!(disk_info = kmalloc(512))) {
-        return false;
+    uint8_t primary_drives = ide_bus_test_and_add_drives(primary_bus);
+    uint8_t secondary_drives = ide_bus_test_and_add_drives(secondary_bus);
+
+    if (primary_drives == 0) {
+        kfree(primary_prdt);
+        kfree(primary_bus);
     }
 
-    //primary bus, master drive
-    memclear(disk_info, 512);
-    if (ide_identify_drive(&ctrl.primary, master, disk_info)) {
-        ide_save_device_info(&ctrl.primary.master, disk_info);
-        ide_save_device_ide_type(&ctrl.primary, master);
-    }
-
-    //primary bus, slave drive
-    memclear(disk_info, 512);
-    if (ide_identify_drive(&ctrl.primary, slave, disk_info)) {
-        ide_save_device_info(&ctrl.primary.slave, disk_info);
-        ide_save_device_ide_type(&ctrl.primary, slave);
-    }
-
-    //secondary bus, master drive
-    memclear(disk_info, 512);
-    if (ide_identify_drive(&ctrl.secondary, master, disk_info)) {
-        ide_save_device_info(&ctrl.secondary.master, disk_info);
-        ide_save_device_ide_type(&ctrl.secondary, master);
-    }
-
-    //secondary bus, slave drive
-    memclear(disk_info, 512);
-    if (ide_identify_drive(&ctrl.secondary, slave, disk_info)) {
-        ide_save_device_info(&ctrl.secondary.slave, disk_info);
-        ide_save_device_ide_type(&ctrl.secondary, slave);
-    }
-
-    //save selected drives
-    ctrl.primary.selected = (uint8_t) ide_read(ctrl.primary.io, IDE_BAR_OFFSET_DRIVE_HEAD) & 0xB0;
-    ctrl.secondary.selected = (uint8_t) ide_read(ctrl.secondary.io, IDE_BAR_OFFSET_DRIVE_HEAD) & 0xB0;
-
-    //save this controller's info into the ide disks pool (created during pci initialization)
-    return obj_pool_put(ide_controllers_pool_id, (void *) &ctrl, ide_controllers_pool_last_ind++);
-}
-
-/*
-Send IDENTIFY command and retrieve some informations.
-This function is used to determine whether a specific drive exists or not.
-To return the 512 bytes of data the info parameter is a pointer to a
-buffer previously allocated.
-*/
-bool ide_identify_drive(ide_bus_t *bus, ide_drive_select_t drive, void *info) {
-    if (!bus || !info) {
-        return false;
-    }
-
-    ide_select_drive(bus, drive);
-    ide_write(bus->io, IDE_BAR_OFFSET_SECTOR_COUNT, 0);
-    ide_write(bus->io, IDE_BAR_OFFSET_LBA_LO, 0);
-    ide_write(bus->io, IDE_BAR_OFFSET_LBA_MID, 0);
-    ide_write(bus->io, IDE_BAR_OFFSET_LBA_HI, 0);
-    ide_command(bus, IDE_COMM_IDENTIFY);
-
-    /* if the returned status is 0 this drive doesn't exist */
-    if (ide_status(bus) == 0) {
-        return false;
-    }
-
-    while(ide_status(bus) >> 7 & 1); //waits for the busy bit (7th) clears
-
-    /* this was commented because it returned false if the drive wasn't a pata drive */
-    /* if LBAmid or LBAhi are not 0, this is not an ATA drive, return false */
-    /*if (ide_read(bus->io, IDE_BAR_OFFSET_LBA_MID) != 0 || ide_read(bus->io, IDE_BAR_OFFSET_LBA_HI) != 0) {
-        return false;
-    }*/
-
-    /* waits for DRQ or ERR bit to set */
-    while(!(ide_status(bus) >> 3 & 1) && !(ide_status(bus) & 1));
-
-    /* reads drive information */
-    for (uint16_t i = 0; i < 256; i++) {
-        *((uint16_t *) info + i) = ide_read(bus->io, IDE_BAR_OFFSET_DATA_REG);
+    if (secondary_drives == 0) {
+        kfree(secondary_prdt);
+        kfree(secondary_bus);
     }
 
     return true;
 }
 
-/* save in the ide_device_t struct the informations returned by the ide_identify_drive */
+/* 
+Given a bus, test if master and slave drives are present.
+If so, save their information retrieved by issuing the IDENTIFY command.
+*/
+uint8_t ide_bus_test_and_add_drives(ide_bus_t *bus) {
+    if (!bus) {
+        return 0;
+    }
+
+    uint8_t found = 0; //number of found drives [0-2]
+    uint16_t device_info[256]; //buffer to save IDENTIFY command returned data
+
+    ide_device_t master_drv, slave_drv;
+    master_drv.bus = bus;
+    master_drv.drive = master;
+    slave_drv.bus = bus;
+    slave_drv.drive = slave;
+
+    //master device
+    memclear(device_info, sizeof(device_info));
+    if (ide_identify(&master_drv, device_info)) {
+        ide_save_device_info(&master_drv, device_info);
+        ide_save_device_ide_type(&master_drv);
+        
+        if (obj_pool_put(ide_devices_pool_id, (void *) &master_drv, ide_devices_pool_last_ind)) {
+            ide_devices_pool_last_ind++;
+            found++;
+        }
+    }
+
+    //slave device
+    memclear(device_info, sizeof(device_info));
+    if (ide_identify(&slave_drv, device_info)) {
+        ide_device_t dev;
+        ide_save_device_info(&dev, device_info);
+        ide_save_device_ide_type(&slave_drv);
+        
+        if (obj_pool_put(ide_devices_pool_id, (void *) &slave_drv, ide_devices_pool_last_ind)) {
+            ide_devices_pool_last_ind++;
+            found++;
+        }
+    }
+
+    return found;
+}
+
+/*
+Sends an IDENTIFY command to the drive and return it's informations.
+Returns true if the drive is present, false otherwise.
+*/
+bool ide_identify(ide_device_t *dev, void *info) {
+    if (!dev || !info || !dev->bus) {
+        return false;
+    }
+
+    ide_bus_t *bus = dev->bus; //get the pointer to this drive's bus
+    ide_select_drive(bus, dev->drive);
+    ide_write_reg(bus->io_bar, IDE_BAR_OFFSET_SECTOR_COUNT, 0);
+    ide_write_reg(bus->io_bar, IDE_BAR_OFFSET_LBA_LO, 0);
+    ide_write_reg(bus->io_bar, IDE_BAR_OFFSET_LBA_MID, 0);
+    ide_write_reg(bus->io_bar, IDE_BAR_OFFSET_LBA_HI, 0);
+    ide_command(bus, IDE_COMM_IDENTIFY);
+
+    if (ide_status(bus) == 0) {
+        return false; //this device doesn't exist
+    }
+
+    while(ide_status(bus) >> 7 & 1); //waits for the busy bit (7th) clears
+    while(!(ide_status(bus) >> 3 & 1) && !(ide_status(bus) & 1)); //waits for DRQ or ERR bit to set
+
+    if (ide_check_error(bus)) {
+        return false;
+    }
+
+    /* reads drive information (256 words = 512 bytes) */
+    for (uint16_t i = 0; i < 256; i++) {
+        *((uint16_t *) info + i) = ide_read_reg(bus->io_bar, IDE_BAR_OFFSET_DATA_REG);
+    }
+
+    return true;
+}
+
+/* save in the ide_device_t struct the informations returned by the ide_identify_device */
 void ide_save_device_info(ide_device_t *dev, uint16_t *info) {
     if (!dev) {
         return;
     }
 
-    dev->exist = true;
     dev->addr_mode = chs; //default addressing mode
+    dev->magic = IDE_DEVICE_MAGIC;
 
     if (*(info + 83) >> 10 & 1) {
         dev->addr_mode = lba48;
@@ -193,56 +188,68 @@ void ide_save_device_info(ide_device_t *dev, uint16_t *info) {
         dev->addr_mode = lba48;
         dev->sectors = lba48_sectors;
     }
-
-    dev->device_type = hard_disk; //u sure about this?
 }
 
 /* resets the bus and save the device ide type */
-void ide_save_device_ide_type(ide_bus_t *bus, ide_drive_select_t select) {
-    ide_device_t *drive = select == master ? &bus->master : &bus->slave;
+void ide_save_device_ide_type(ide_device_t *dev) {
+    if (!dev || !dev->bus) {
+        return;
+    }
 
+    ide_bus_t *bus = dev->bus;
     ide_reset(bus);
     ide_wait(bus);
-    ide_select_drive(bus, select);
-    uint8_t cl = ide_read(bus->io, IDE_BAR_OFFSET_LBA_MID);
-    uint8_t ch = ide_read(bus->io, IDE_BAR_OFFSET_LBA_HI);
+    ide_select_drive(bus, dev->drive);
+    uint8_t cl = ide_read_reg(bus->io_bar, IDE_BAR_OFFSET_LBA_MID);
+    uint8_t ch = ide_read_reg(bus->io_bar, IDE_BAR_OFFSET_LBA_HI);
 
     if (cl == 0x14 && ch == 0xEB) {
-        drive->ide_type = ide_patapi;
+        dev->ide_type = ide_patapi;
     } else if (cl == 0x69 && ch == 0x96) {
-        drive->ide_type = ide_satapi;
+        dev->ide_type = ide_satapi;
     } else if (cl == 0x00 && ch == 0x00) {
-        drive->ide_type = ide_pata;
+        dev->ide_type = ide_pata;
     } else if (cl == 0x3C && ch == 0xC3) {
-        drive->ide_type = ide_sata;
+        dev->ide_type = ide_sata;
     } else {
-        drive->ide_type = ide_unknown;
+        dev->ide_type = ide_unknown;
     }
 }
 
-bool ide_set_channels_mode(pci_general_dev_t *dev) {
-    if (!dev || (pci_dev_type_t) dev->header.class_code != mass_storage || (mass_storage_subclass_t) dev->header.subclass != ide) {
+/* sets a bus to native or compatibility mode */
+bool ide_set_bus_mode(pci_general_dev_t *pci_dev, ide_bus_select_t bus, ide_channel_mode_t mode) {
+    if (!pci_dev) {
         return false;
     }
 
-    uint8_t *prog_if = &dev->header.prog_if;
+    uint8_t *prog_if = &pci_dev->header.prog_if;
 
-    bool channel1_native_mode = *prog_if & 1;
-    bool channel2_native_mode = *prog_if >> 2 & 1;
-    bool channel1_mode_changeable = *prog_if >> 1 & 1;
-    bool channel2_mode_changeable = *prog_if >> 3 & 1;
-
-    if (!channel1_native_mode && channel1_mode_changeable) {
-        *prog_if |= 1;
-    } else if (!channel1_native_mode) {
-        return false; //channel 1 unsupported mode
-    }
-
-    if (!channel2_native_mode && channel2_mode_changeable) {
-        *prog_if |= (1 << 2);
-    } else if (!channel2_native_mode) {
-        return false; //channel 2 unsupported mode
+    if (bus == primary && (*prog_if >> 1 & 1)) {
+        if (mode == native) {
+            *prog_if |= 1;
+        } else {
+            *prog_if &= 0xFE;
+        }
+    } else if (bus == secondary && (*prog_if >> 3 & 1)) {
+        if (mode == native) {
+            *prog_if |= (1 << 2);
+        } else {
+            *prog_if &= 0xFB;
+        }
+    } else {
+        return false;
     }
 
     return true;
+}
+
+void ide_bus_init(ide_bus_t *bus, uint32_t io, uint32_t ctrl, bool dma, ide_prd_t *prdt) {
+    if (!bus) {
+        return;
+    }
+
+    bus->io_bar = io;
+    bus->ctrl_bar = ctrl;
+    bus->dma_enabled = dma;
+    bus->prdt = prdt;
 }

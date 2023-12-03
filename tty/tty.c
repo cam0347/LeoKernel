@@ -53,7 +53,7 @@ bool init_tty(struct leokernel_boot_params bp) {
     tty_width = bp.video_width;
     tty_size = bp.frame_buffer_size;
 
-    tty_color.foreground = GREY_COLOR;
+    tty_color.foreground = TTY_COLOR_WHITE;
     tty_color.background = TTY_COLOR_BLACK;
     tty_color.bg_transparent = true;
 

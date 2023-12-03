@@ -11,7 +11,7 @@ typedef struct {
     uint16_t command;        //
     uint16_t status;         //status for pci related events
     uint8_t revision_id;     //revision identifier
-    uint8_t prog_if;         //read-only register that specifies a register-level programming interface the device has
+    uint8_t prog_if;         //register that specifies a register-level programming interface the device has
     uint8_t subclass;        //identifies the specific function this device performs
     uint8_t class_code;      //identifies the type of function this device performs
     uint8_t cache_line_size;
