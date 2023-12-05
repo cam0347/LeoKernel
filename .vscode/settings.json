@@ -12,6 +12,7 @@
         "ide_io.h": "c",
         "pcie.h": "c",
         "acpi.h": "c",
-        "ahci_setup.h": "c"
+        "ahci_setup.h": "c",
+        "ide_pio.h": "c"
     }
 }

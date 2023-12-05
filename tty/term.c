@@ -20,7 +20,7 @@ void init_terminal(void) {
     if (CLEAR_SCREEN_ON_TERMINAL_START) {
         tty_clear();
     }
-    
+
     term_command = kmalloc(TERMINAL_COMMAND_LENGTH);
     command_ready = false;
     memclear(term_command, TERMINAL_COMMAND_LENGTH);

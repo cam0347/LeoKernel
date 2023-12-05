@@ -2,8 +2,43 @@
 #include <include/types.h>
 
 typedef struct {
-    uint8_t foo;
-} ahci_controller_t;
+	uint32_t clb_lo;		    // 0x00, command list base address, 1K-byte aligned
+	uint32_t clb_hi;		    // 0x04, command list base address upper 32 bits
+	uint32_t fis_base_lo;		// 0x08, FIS base address, 256-byte aligned
+	uint32_t fis_base_hi;		// 0x0C, FIS base address upper 32 bits
+	uint32_t int_status;		// 0x10, interrupt status
+	uint32_t int_enable;		// 0x14, interrupt enable
+	uint32_t command;		    // 0x18, command and status
+	uint32_t rsv0;		        // 0x1C, Reserved
+	uint32_t task_file_data;	// 0x20, task file data
+	uint32_t signature;		    // 0x24, signature
+	uint32_t sata_status;		// 0x28, SATA status (SCR0:SStatus)
+	uint32_t sata_control;		// 0x2C, SATA control (SCR2:SControl)
+	uint32_t sata_error;		// 0x30, SATA error (SCR1:SError)
+	uint32_t sata_active;		// 0x34, SATA active (SCR3:SActive)
+	uint32_t command_issue;		// 0x38, command issue
+	uint32_t sata_notification;	// 0x3C, SATA notification (SCR4:SNotification)
+	uint32_t fis_switch_ctrl;	// 0x40, FIS-based switch control
+	uint32_t rsv1[11];	        // 0x44 ~ 0x6F, Reserved
+	uint32_t vendor[4];	        // 0x70 ~ 0x7F, vendor specific
+} ahci_hba_port_t;
+
+typedef struct {
+	uint32_t host_capability;		// 0x00, Host capability
+	uint32_t global_host_control;	// 0x04, Global host control
+	uint32_t int_status;		    // 0x08, Interrupt status
+	uint32_t port_impl;		        // 0x0C, Port implemented
+	uint32_t version;		        // 0x10, Version
+	uint32_t ccc_ctrl;	            // 0x14, Command completion coalescing control
+	uint32_t ccc_ports;          	// 0x18, Command completion coalescing ports
+	uint32_t em_loc;		        // 0x1C, Enclosure management location
+	uint32_t em_ctrl;		        // 0x20, Enclosure management control
+	uint32_t host_capability_ext;	// 0x24, Host capabilities extended
+	uint32_t bohc;		            // 0x28, BIOS/OS handoff control and status
+	uint8_t  rsv[0xA0-0x2C];        //reserved
+	uint8_t  vendor[0x100-0xA0];    //vendor specific
+	ahci_hba_port_t	ports[1];	    //port control registers
+} ahci_hba_memory_t;
 
 typedef enum {
     fis_reg_host_to_dev = 0x27,   //register fis, host to device
@@ -11,6 +46,13 @@ typedef enum {
     fis_data_bi = 0x46,           //data fis, bidirectional
     fis_pio_setup = 0x5F          //pio setup fis
 } ahci_fis_type_t;
+
+typedef enum {
+	ahci_ata = 0x00000101,    //SATA drive
+	ahci_atapi = 0xEB140101,  //SATAPI drive
+	ahci_semb = 0xC33C0101,   //enclosure management bridge
+	ahci_pm = 0x96690101      //port multiplier
+} ahci_device_type_t;
 
 /* register fis, host to device, used to send commands to a device */
 typedef struct {
@@ -92,3 +134,55 @@ typedef struct {
 	uint16_t tc;		   // transfer count
 	uint8_t rsv4[2];	   // reserved
 } ahci_fis_pio_setup_t;
+
+typedef struct {
+	uint8_t  fis_type;       // FIS_TYPE_DMA_SETUP
+	uint8_t  pmport: 4;      // Port multiplier
+	uint8_t  rsv0: 1;        // Reserved
+	uint8_t  d: 1;           // Data transfer direction, 1 - device to host
+	uint8_t  i: 1;		     // Interrupt bit
+	uint8_t  a: 1;           // Auto-activate. Specifies if DMA Activate FIS is needed
+    uint8_t  rsved[2];       // Reserved
+	uint64_t DMAbufferID;    // DMA Buffer Identifier. Used to Identify DMA buffer in host memory.
+	uint32_t rsvd;           //More reserved
+	uint32_t DMAbufOffset;   //Byte offset into buffer. First 2 bits must be 0
+	uint32_t TransferCount;  //Number of bytes to transfer. Bit 0 must be 0
+	uint32_t resvd;          //Reserved
+} ahci_fis_dma_setup_t;
+
+typedef struct {
+	uint8_t  comm_fis_length: 5;  // Command FIS length in DWORDS, 2 ~ 16
+	uint8_t  atapi: 1;		      // ATAPI
+	uint8_t  write: 1;		      // Write, 1: H2D, 0: D2H
+	uint8_t  prefetchable: 1;	  // Prefetchable
+	uint8_t  reset: 1;		      // Reset
+	uint8_t  bist: 1;		      // BIST
+	uint8_t  clear: 1;		      // Clear busy upon R_OK
+	uint8_t  rsv0: 1;		      // Reserved
+	uint8_t  port_mult_port: 4;   // Port multiplier port
+	uint16_t prdt_llength;		  // Physical region descriptor table length in entries
+	volatile uint32_t prd_bytes;  // Physical region descriptor byte count transferred
+	uint32_t comm_table_lo;       // Command table descriptor base address
+	uint32_t comm_table_hi;       // Command table descriptor base address upper 32 bits
+	uint32_t rsv1[4];             // Reserved
+} ahci_comm_header_t;
+
+typedef struct {
+	ahci_fis_dma_setup_t dsfis;  // DMA Setup FIS
+	uint8_t pad0[4];
+	ahci_fis_pio_setup_t psfis;  // PIO Setup FIS
+	uint8_t pad1[12];
+	ahci_fis_reg_d2h_t rfis;     // Register – Device to Host FIS
+	uint8_t pad2[4];
+	uint8_t sdbfis[1];           // Set Device Bit FIS placeholder
+	uint8_t ufis[64];
+	uint8_t rsv[0x100-0xA0];
+} ahci_hba_received_fis_t;
+
+typedef struct {
+	ahci_hba_memory_t *ctrl;
+	ahci_hba_port_t *port;
+} ahci_device_t;
+
+bool ahci_command(ahci_device_t *dev, ahci_comm_header_t comm);
+ahci_comm_header_t *ahci_cl_get_slot(ahci_device_t *dev);

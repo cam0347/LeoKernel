@@ -231,7 +231,7 @@ void putchar(char c, tty_color_t fg, tty_color_t bg) {
             tty_cursor.x = 0;
             tty_cursor.y = 0;
         }
-        
+
         tty_tem_line_number();
         //tty_tem_close_bracket();
 

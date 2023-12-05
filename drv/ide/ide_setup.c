@@ -148,6 +148,10 @@ bool ide_identify(ide_device_t *dev, void *info) {
         return false; //this device doesn't exist
     }
 
+    if (ide_check_error(bus)) {
+        return false;
+    }
+
     while(ide_status(bus) >> 7 & 1); //waits for the busy bit (7th) clears
     while(!(ide_status(bus) >> 3 & 1) && !(ide_status(bus) & 1)); //waits for DRQ or ERR bit to set
 
