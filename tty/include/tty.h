@@ -16,7 +16,6 @@ typedef struct {
     tty_color_t foreground;
 } tty_char_t;
 
-//prototypes
 bool init_tty(struct leokernel_boot_params);
 tty_color_t get_tty_char_color();
 void set_tty_char_fg(tty_color_t new_color);
@@ -25,22 +24,16 @@ tty_color_t get_tty_char_fg();
 tty_color_t get_tty_char_bg();
 void plot_pixel(uint64_t, uint64_t, tty_color_t);
 void tty_clear();
-void tty_load_font(void *file, void **glyphs, uint8_t *glyph_height, uint8_t *glyph_width);
+bool tty_load_font(void *file, void **glyphs, uint8_t *glyph_height, uint8_t *glyph_width);
 void putchar(char c, tty_color_t fg, tty_color_t bg);
 void putchar_at(char c, uint32_t x, uint32_t y, tty_color_t fg, tty_color_t bg);
 void tty_clear_cell(uint32_t x, uint32_t y);
 void tty_backspace();
 void printf(const char *fmt, ...);
 void print_color(char *str, tty_color_t fg, tty_color_t bg);
-void draw_grid();
 void fail(char *);
 void launch_splashscreen();
 void tty_enable_bg();
 void tty_disable_bg();
-void tty_tem_line_number();
-void tty_tem_open_bracket();
-void tty_tem_close_bracket();
-void tty_tem_enable();
-void tty_tem_disable();
 uint64_t get_tty_grid_height();
 uint64_t get_tty_grid_width();

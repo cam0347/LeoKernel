@@ -2,6 +2,7 @@
 #include <drv/ahci/include/ahci.h>
 #include <include/mem.h>
 
+/* send a command to an ahci device */
 bool ahci_command(ahci_device_t *dev, ahci_comm_header_t comm) {
     if (!dev) {
         return false;
@@ -17,6 +18,7 @@ bool ahci_command(ahci_device_t *dev, ahci_comm_header_t comm) {
     return true;
 }
 
+/* given an ahci device, find a command slot */
 ahci_comm_header_t *ahci_cl_get_slot(ahci_device_t *dev) {
     if (!dev || !dev->port) {
         return null;
@@ -30,7 +32,7 @@ ahci_comm_header_t *ahci_cl_get_slot(ahci_device_t *dev) {
         return false;
     }
 
-    uint32_t slots = dev->ctrl->host_capability;
+    uint32_t slots = dev->ctrl->host_capability >> 8 & 0x1F;
 
     for (uint8_t i = 0; i < slots; i++) {
         if (!(dev->port->command_issue >> i & 1)) {

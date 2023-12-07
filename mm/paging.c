@@ -64,19 +64,19 @@ void *get_physical_address(void *virtual) {
     uint64_t *pdpt, *pd, *pt;
 
     if (pml4[field0] == null) {
-        return (void *) TRANSLATION_UNKNOWN;
+        return TRANSLATION_UNKNOWN;
     } else {
         pdpt = (uint64_t *)(pml4[field0] & 0xFFFFFFFFFFFFF000);
     }
 
     if (pdpt[field1] == null) {
-        return  (void *) TRANSLATION_UNKNOWN;
+        return TRANSLATION_UNKNOWN;
     } else {
         pd = (uint64_t *)(pdpt[field1] & 0xFFFFFFFFFFFFF000);
     }
 
     if (pd[field2] == null) {
-        return  (void *) TRANSLATION_UNKNOWN;
+        return TRANSLATION_UNKNOWN;
     } else {
         pt = (uint64_t *)(pd[field2] & 0xFFFFFFFFFFFFF000);
     }

@@ -41,6 +41,17 @@ bool ahci_search_and_add_devices(ahci_hba_memory_t *hba_mem) {
             if (!ahci_init_device(&hba_mem->ports[i])) {
                 return false;
             }
+
+            ahci_device_t dev = {
+                .ctrl = hba_mem,
+                .port = &hba_mem->ports[i]
+            };
+
+            if (obj_pool_put(ahci_devices_pool_id, (void *) &dev, ahci_devices_pool_last_id)) {
+                ahci_devices_pool_last_id++;
+            } else {
+                return false;
+            }
         }
     }
 
@@ -61,24 +72,13 @@ bool ahci_init_device(volatile ahci_hba_port_t *port) {
         return true;
     }
 
-    /*
-    allocate a page for this device's command list (1K) and
-    FIS base (512 bytes).
-    */
-    void *device_memory = kalloc_page(1);
-    void *physical = get_physical_address(device_memory);
-
-    if (!device_memory || physical == TRANSLATION_UNKNOWN) {
-        return false;
-    }
+    ahci_comm_header_t *comm_list = (ahci_comm_header_t *)((uint64_t) port->clb_hi << 32 | port->clb_lo);
     
-    void *clb = physical;
-    void *fb = clb + 1024; //the command list takes 32 * 32 bytes
-
-    port->clb_lo = (uint32_t)((uint64_t) clb & 0xFFFFFFFF);
-    port->clb_hi = (uint32_t)((uint64_t) clb >> 32 & 0xFFFFFFFF);
-    port->fis_base_lo = (uint32_t)((uint64_t) fb & 0xFFFFFFFF);
-    port->fis_base_hi = (uint32_t)((uint64_t) fb >> 32 & 0xFFFFFFFF);
+    for (uint8_t i = 0; i < 32; i++) {
+        ahci_comm_header_t *cl_entry = comm_list + i;
+        ahci_hba_command_table_t *comm_table = (ahci_hba_command_table_t *)((uint64_t) cl_entry->comm_table_hi << 32 | cl_entry->comm_table_lo);
+        printf("command table %d at 0x%X\n", i, comm_table);
+    }
 
     return true;
 }

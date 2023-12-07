@@ -65,9 +65,6 @@ uint32_t strcmp(const char *str1, const char *str2) {
 }
 
 int strncmp(char *str1, char *str2, uint32_t n) {
-    //uint32_t str_min = int_min(strlen(str1), strlen(str2));
-    //uint32_t cmp_len = n > str_min ? str_min : n;
-
     for (uint32_t i = 0; i < n; i++) {
         if (*(str1 + i) > *(str2 + i)) {
             return 1;

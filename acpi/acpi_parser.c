@@ -23,7 +23,7 @@ bool init_acpi(struct leokernel_boot_params bootp) {
     __acpi_fadt = (acpi_fadt_t *) acpi_locate_table("FACP", 0);
     __acpi_madt = (acpi_madt_t *) acpi_locate_table("APIC", 0);
     if (__acpi_fadt == null || __acpi_madt == null) {return false;}
-    parse_fadt(__acpi_fadt); //sets __acpi_dsdt and __acpi_facs
+    acpi_parse_fadt(__acpi_fadt); //sets __acpi_dsdt and __acpi_facs
     if (__acpi_dsdt == null) {return false;}
 
     lapic_address = null;
@@ -33,7 +33,7 @@ bool init_acpi(struct leokernel_boot_params bootp) {
 
     extern uint32_t lapics_array_index; //defined in apic.c
     lapics_array_index = 0;
-    parse_madt(__acpi_madt);
+    acpi_parse_madt(__acpi_madt);
 
     return true;
 }
@@ -56,7 +56,7 @@ void *acpi_locate_table(char *signature, uint32_t n) {
 
     for (uint32_t i = 0; i < num_entries; i++) {
         acpi_table_header *table = __acpi_xsdt->ptr[i];
-        if (!validate_checksum(table)) {continue;}
+        if (!acpi_validate_checksum(table)) {continue;}
         if (strncmp(table->signature, signature, 4) == 0) {
             if (last_index == n) {
                 return (void *) table;
@@ -69,7 +69,7 @@ void *acpi_locate_table(char *signature, uint32_t n) {
     return null;
 }
 
-bool validate_checksum(acpi_table_header *header) {
+bool acpi_validate_checksum(acpi_table_header *header) {
     uint8_t sum = 0;
  
     for (int i = 0; i < header->length; i++) {
@@ -79,14 +79,14 @@ bool validate_checksum(acpi_table_header *header) {
     return sum == 0;
 }
 
-void parse_fadt(void *fadt_addr) {
+void acpi_parse_fadt(void *fadt_addr) {
     acpi_fadt_t *fadt = (acpi_fadt_t *) fadt_addr;
     __acpi_dsdt = (void *) fadt->x_dsdt;
     __acpi_facs = (void *)(uint64_t) fadt->firmware_ctrl != 0 ? (void *)(uint64_t) fadt->firmware_ctrl : (void *) fadt->x_firmware_ctrl;
     __machine_type = (acpi_preferred_power_management_profile) fadt->preferred_pm_profile;
 }
 
-void parse_madt(void *madt_addr) {
+void acpi_parse_madt(void *madt_addr) {
     acpi_madt_t *madt = (acpi_madt_t *) madt_addr;
     void *madt_entries = (void *) madt + sizeof(acpi_madt_t); //the entries in this table start after the header
     uint64_t offset = 0;
@@ -98,7 +98,7 @@ void parse_madt(void *madt_addr) {
         void *entry = madt_entries + offset;
         uint8_t entry_type = *(uint8_t *) entry;
         uint8_t entry_size = *(uint8_t *) (entry + 1);
-        switch_madt_entry(entry, entry_type);
+        acpi_switch_madt_entry(entry, entry_type);
         offset += entry_size;
     }
 }
@@ -106,7 +106,7 @@ void parse_madt(void *madt_addr) {
 /*
 Do something with a madt entry
 */
-void switch_madt_entry(void *entry, acpi_madt_entry_type type) {
+void acpi_switch_madt_entry(void *entry, acpi_madt_entry_type type) {
     switch((acpi_madt_entry_type) type) {
         //defines a local apic
         case lapic:

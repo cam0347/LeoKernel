@@ -1,6 +1,20 @@
 #pragma once
 #include <include/types.h>
 
+typedef enum {
+    fis_reg_host_to_dev = 0x27,   //register fis, host to device
+    fis_reg_dev_to_host = 0x34,   //register fis, device to host
+    fis_data_bi = 0x46,           //data fis, bidirectional
+    fis_pio_setup = 0x5F          //pio setup fis
+} ahci_fis_type_t;
+
+typedef enum {
+	ahci_ata = 0x00000101,    //SATA drive
+	ahci_atapi = 0xEB140101,  //SATAPI drive
+	ahci_semb = 0xC33C0101,   //enclosure management bridge
+	ahci_pm = 0x96690101      //port multiplier
+} ahci_device_type_t;
+
 typedef struct {
 	uint32_t clb_lo;		    // 0x00, command list base address, 1K-byte aligned
 	uint32_t clb_hi;		    // 0x04, command list base address upper 32 bits
@@ -39,20 +53,6 @@ typedef struct {
 	uint8_t  vendor[0x100-0xA0];    //vendor specific
 	ahci_hba_port_t	ports[1];	    //port control registers
 } ahci_hba_memory_t;
-
-typedef enum {
-    fis_reg_host_to_dev = 0x27,   //register fis, host to device
-    fis_reg_dev_to_host = 0x34,   //register fis, device to host
-    fis_data_bi = 0x46,           //data fis, bidirectional
-    fis_pio_setup = 0x5F          //pio setup fis
-} ahci_fis_type_t;
-
-typedef enum {
-	ahci_ata = 0x00000101,    //SATA drive
-	ahci_atapi = 0xEB140101,  //SATAPI drive
-	ahci_semb = 0xC33C0101,   //enclosure management bridge
-	ahci_pm = 0x96690101      //port multiplier
-} ahci_device_type_t;
 
 /* register fis, host to device, used to send commands to a device */
 typedef struct {
@@ -150,22 +150,41 @@ typedef struct {
 	uint32_t resvd;          //Reserved
 } ahci_fis_dma_setup_t;
 
+/* command header, each device has up to 32 of these */
 typedef struct {
-	uint8_t  comm_fis_length: 5;  // Command FIS length in DWORDS, 2 ~ 16
-	uint8_t  atapi: 1;		      // ATAPI
-	uint8_t  write: 1;		      // Write, 1: H2D, 0: D2H
-	uint8_t  prefetchable: 1;	  // Prefetchable
-	uint8_t  reset: 1;		      // Reset
-	uint8_t  bist: 1;		      // BIST
-	uint8_t  clear: 1;		      // Clear busy upon R_OK
-	uint8_t  rsv0: 1;		      // Reserved
-	uint8_t  port_mult_port: 4;   // Port multiplier port
+	uint8_t comm_fis_length: 5;   // Command FIS length in DWORDS, 2 ~ 16
+	uint8_t atapi: 1;		      // ATAPI
+	uint8_t write: 1;		      // Write, 1: H2D, 0: D2H
+	uint8_t prefetchable: 1;	  // Prefetchable
+	uint8_t reset: 1;		      // Reset
+	uint8_t bist: 1;		      // BIST
+	uint8_t clear: 1;		      // Clear busy upon R_OK
+	uint8_t rsv0: 1;		      // Reserved
+	uint8_t port_mult_port: 4;    // Port multiplier port
 	uint16_t prdt_llength;		  // Physical region descriptor table length in entries
 	volatile uint32_t prd_bytes;  // Physical region descriptor byte count transferred
 	uint32_t comm_table_lo;       // Command table descriptor base address
 	uint32_t comm_table_hi;       // Command table descriptor base address upper 32 bits
 	uint32_t rsv1[4];             // Reserved
 } ahci_comm_header_t;
+
+/* AHCI PRDT entry */
+typedef struct {
+	uint32_t dba;		// Data base address
+	uint32_t dbau;		// Data base address upper 32 bits
+	uint32_t rsv0;		// Reserved
+	uint32_t dbc: 22;	// Byte count, 4M max
+	uint32_t rsv1: 9;	// Reserved
+	uint32_t i: 1;		// Interrupt on completion
+} ahci_hba_prdt_entry_t;
+
+/* command table, pointed by a command header */
+typedef struct {
+	uint8_t cfis[64];                    // Command FIS
+	uint8_t acmd[16];                    // ATAPI command, 12 or 16 bytes
+	uint8_t rsv[48];	                 // Reserved
+	ahci_hba_prdt_entry_t prdt_entry[1]; // Physical region descriptor table entries, 0 ~ 65535
+} ahci_hba_command_table_t;
 
 typedef struct {
 	ahci_fis_dma_setup_t dsfis;  // DMA Setup FIS

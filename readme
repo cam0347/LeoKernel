@@ -12,5 +12,10 @@ bootstraps itself to an environment suitable to run user code.
 My code is totally different from anyone else's. I don't like rules so everything here is not what you expect it to be. My code could be messy, clean, unefficient, the most
 beautiful code you ever seen, idk.. it's up to you, this is my style :)
 
-## I'm tired
-So this is all.. further informations may or may not come in the next days
+## How to compile
+INPUT_FILES = $(shell find src -not -name "isr.c" -name "*.c")
+gcc -c -ffreestanding -nostdlib -O0 -m64 -no-pie -Isrc $(INPUT_FILES)
+gcc -c -ffreestanding -nostdlib -O0 -m64 -no-pie -mgeneral-regs-only -Isrc src/int/*.c
+ld -T linker.ld *.o -o leokernel.elf
+
+the linker script (linker.ld) is not present here, i'll upload it later on

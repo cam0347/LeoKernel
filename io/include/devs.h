@@ -1,6 +1,7 @@
 #pragma once
 #include <include/types.h>
 #include <io/include/pci.h>
+#include <mm/include/obj_alloc.h>
 
 typedef enum {
     scsi,
@@ -34,7 +35,8 @@ typedef struct {
 
 //---------------------------------------------------------------------------------
 typedef struct {
-
-} disk_t;
+    mass_storage_subclass_t type;
+    pool_t pool_id;
+} ms_dev_t;
 
 bool devs_config_mass_storage(pci_general_dev_t *dev);

@@ -17,7 +17,7 @@ bool init_pci_tree(void) {
     return true;
 }
 
-/* create a bus node in the pci tree */
+/* create a bus node */
 pci_tree_bus_t *pci_tree_create_bus(uint8_t id) {
     pci_tree_bus_t *node;
 
@@ -32,7 +32,7 @@ pci_tree_bus_t *pci_tree_create_bus(uint8_t id) {
     return node;
 }
 
-/* returns the tree node associated to the specified bus id */
+/* returns the tree node associated to the bus with the specified id */
 pci_tree_bus_t *pci_tree_get_bus_by_id(uint8_t id) {
     pci_tree_bus_t *current = pci_tree_root;
 
@@ -60,7 +60,7 @@ pci_tree_bus_t *pci_tree_get_bus_by_id(uint8_t id) {
     return current;
 }
 
-/* create a device node in the pci tree */
+/* create a device node */
 pci_tree_device_t *pci_tree_create_device(pci_general_dev_t *dev, pci_tree_bus_t *bus) {
     pci_tree_device_t *node;
 
@@ -75,7 +75,7 @@ pci_tree_device_t *pci_tree_create_device(pci_general_dev_t *dev, pci_tree_bus_t
     return node;
 }
 
-/* appends a device to a bus device list */
+/* installs the device into the pci tree */
 bool pci_tree_install_device(pci_tree_device_t *dev, pci_tree_bus_t *bus) {
     if (!dev || !bus) {
         return false;
@@ -99,7 +99,7 @@ bool pci_tree_install_device(pci_tree_device_t *dev, pci_tree_bus_t *bus) {
     return true;
 }
 
-/* appends a secondary bus to a primary bus using a bridge */
+/* installs the bus into the pci tree */
 bool pci_tree_install_bus(pci_tree_bus_t *primary, pci_tree_bus_t *secondary, pci_pci_bridge_t *bridge) {
     if (!primary || !secondary) {
         return false;
@@ -154,7 +154,7 @@ void pci_tree_print_bus(pci_tree_bus_t *bus, uint8_t indent) {
 
     do {
         pci_tree_print_indent(indent);
-        printf("CC %d, SC %d, INT%c#\n",
+        printf("class code %d, subclass %d, INT%c#\n",
             device->dev->header.class_code,
             device->dev->header.subclass,
             device->dev->int_pin != 0 ? 'A' - 1 + device->dev->int_pin : 'F');

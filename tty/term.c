@@ -67,11 +67,11 @@ void term_putc(char c) {
         c -= 32;
     } else if (ks.altgr) {
         switch(c) {
-            case ';':
+            case 'o':
                 c = '@';
                 break;
 
-            case '\'':
+            case 'a':
                 c = '#';
                 break;
         }

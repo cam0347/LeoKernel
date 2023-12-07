@@ -226,9 +226,7 @@ leokernel_memory_descriptor_t *find_available_virtual_memory(uint32_t num_pages,
     return null;
 }
 
-/*
-Maps a virtual address into a physical address.
-*/
+/* maps a virtual address to a physical address */
 bool kmap_page(void *virtual, void *physical) {
     uint64_t page_address = (uint64_t) virtual & 0xFFFFFFFFFFFFF000;
     uint64_t frame_address = (uint64_t) physical & 0xFFFFFFFFFFFFF000;

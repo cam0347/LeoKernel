@@ -9,7 +9,6 @@ extern uint64_t tty_height, tty_width;
 
 __attribute__((noreturn))
 void panic(char *reason) {
-    tty_tem_disable();
     tty_clear();
     set_tty_char_fg(TTY_COLOR_WHITE);
     tty_disable_bg(); //disable text background

@@ -1,17 +1,11 @@
-#include <tty/include/tty.h>
 #include <include/types.h>
-#include <include/assert.h>
 #include <include/mem.h>
-#include <include/string.h>
-#include <include/bootp.h>
+#include <tty/include/tty.h>
 #include <tty/include/psf_font.h>
-#include <include/low_level.h>
-#include <include/math.h>
-#include <include/stdargs.h>
 #include <tty/include/vsnprintf.h>
 #include <tty/include/hue.h>
-#include <tty/include/def_colors.h>
-#include <mm/include/kmalloc.h>
+#include <include/string.h>
+#include <include/low_level.h>
 
 void *fb, *glyphs;
 uint64_t tty_height, tty_width, tty_size;
@@ -37,7 +31,6 @@ struct {
 } tty_color;
 
 bool tty_ready = false;
-bool tem_enabled = true; //text editor mode selector
 
 //initialize terminal
 bool init_tty(struct leokernel_boot_params bp) {
@@ -45,7 +38,10 @@ bool init_tty(struct leokernel_boot_params bp) {
         return false;
     }
 
-    tty_load_font(bp.font, &glyphs, &tty_grid.cell_height, &tty_grid.cell_width);
+    if (tty_load_font(bp.font, &glyphs, &tty_grid.cell_height, &tty_grid.cell_width)) {
+        //what happens now?
+        return false;
+    }
 
     fb = bp.frame_buffer;
 
@@ -64,22 +60,22 @@ bool init_tty(struct leokernel_boot_params bp) {
     tty_cursor.x = 0;
     tty_cursor.y = 0;
 
-    tem_enabled = false;
-    tty_tem_line_number();
-
     tty_clear();
     tty_ready = true;
 
     return true;
 }
 
-void tty_load_font(void *file, void **glyphs, uint8_t *glyph_height, uint8_t *glyph_width) {
-    assert_true(file != null);
+bool tty_load_font(void *file, void **glyphs, uint8_t *glyph_height, uint8_t *glyph_width) {
+    if (!file) {
+        return null;
+    }
+
     bool psf1 = (*(uint16_t *) file == PSF1_HEADER_MAGIC);
     bool valid = psf1 || (*(uint32_t *) file == PSF2_HEADER_MAGIC);
 
     if (!valid) {
-        sys_hlt(); //che si fa?
+        return false;
     }
 
     if (psf1) {
@@ -153,47 +149,6 @@ void launch_splashscreen() {
     }
 }
 
-void tty_tem_line_number() {
-    if (!tem_enabled) {
-        return;
-    }
-
-    tty_color_t prev = get_tty_char_fg();
-    set_tty_char_fg(GREY_COLOR);
-    printf("%02d  ", tty_cursor.y);
-    set_tty_char_fg(prev);
-}
-
-void tty_tem_open_bracket() {
-    if (!tem_enabled) {
-        return;
-    }
-
-    tty_color_t prev = get_tty_char_fg();
-    set_tty_char_fg(RED_COLOR);
-    printf("{\n", tty_cursor.y);
-    set_tty_char_fg(prev);
-}
-
-void tty_tem_close_bracket() {
-    if (!tem_enabled) {
-        return;
-    }
-
-    tty_color_t prev = get_tty_char_fg();
-    set_tty_char_fg(RED_COLOR);
-    putchar_at('}', 0, tty_cursor.y + 1, tty_color.foreground, tty_color.background);
-    set_tty_char_fg(prev);
-}
-
-void tty_tem_enable() {
-    tem_enabled = true;
-}
-
-void tty_tem_disable() {
-    tem_enabled = false;
-}
-
 //print a character to a specific grid location
 void putchar_at(char c, uint32_t x, uint32_t y, tty_color_t fg, tty_color_t bg) {
     if (!tty_ready) {return;}
@@ -232,9 +187,6 @@ void putchar(char c, tty_color_t fg, tty_color_t bg) {
             tty_cursor.y = 0;
         }
 
-        tty_tem_line_number();
-        //tty_tem_close_bracket();
-
         if (c == '\n') {
             return;
         }
@@ -244,9 +196,7 @@ void putchar(char c, tty_color_t fg, tty_color_t bg) {
     tty_cursor.x++; //move the cursor 1 position right
 }
 
-/*
-clears a grid cell
-*/
+/* clears a grid cell */
 void tty_clear_cell(uint32_t x, uint32_t y) {
     if (x >= tty_grid.width || y >= tty_grid.height) {
         return;
@@ -260,14 +210,7 @@ void tty_clear_cell(uint32_t x, uint32_t y) {
 }
 
 void tty_backspace() {
-    if (tty_cursor.x == 0 && !tem_enabled || tty_cursor.x == 4 && tem_enabled) {
-        if (tem_enabled) {
-            tty_clear_cell(3, tty_cursor.y);
-            tty_clear_cell(2, tty_cursor.y);
-            tty_clear_cell(1, tty_cursor.y);
-            tty_clear_cell(0, tty_cursor.y);
-        }
-
+    if (tty_cursor.x == 0) {
         if (tty_cursor.y > 0) {
             tty_cursor.x = tty_grid.width - 1;
             tty_cursor.y--;
@@ -302,55 +245,15 @@ void printf(const char *fmt, ...) {
     va_end(args);
 }
 
-void draw_grid() {
-    if (!tty_ready) {return;}
-
-    //draws vertical lines
-    for (int i = 0; i < tty_grid.width; i++) {
-        for (int j = 0; j < tty_height; j++) {
-            plot_pixel(i * tty_grid.cell_width, j, 0x555555);
-        }
-    }
-
-    //draws horizontal lines
-    for (int i = 0; i < tty_grid.height; i++) {
-        for (int j = 0; j < tty_width; j++) {
-            plot_pixel(j, i * tty_grid.cell_height, 0x555555);
-        }
-    }
-}
-
-//clear the screen
+/* clears the screen */
 void tty_clear() {
     memclear(fb, tty_size);
     tty_cursor.x = 0;
     tty_cursor.y = 0;
 }
 
-//prints an error message and halts the cpu
+/* prints an error message and halt */
 void fail(char *str) {
     printf("-----[%s]-----\n", str);
     sys_hlt();
-}
-
-void cursor_blinkr() {
-    static bool visible = false;
-
-    if (!visible) {
-        for (uint32_t i = 0; i < tty_grid.cell_height; i++) {
-            for (uint32_t j = 0; j < tty_grid.cell_width; j++) {
-                plot_pixel(tty_cursor.x * tty_grid.cell_width + j, tty_cursor.y * tty_grid.cell_height + i, RGB(200, 200, 200));
-            }
-        }
-
-        visible = true;
-    } else {
-        for (uint32_t i = 0; i < tty_grid.cell_height; i++) {
-            for (uint32_t j = 0; j < tty_grid.cell_width; j++) {
-                plot_pixel(tty_cursor.x * tty_grid.cell_width + j, tty_cursor.y * tty_grid.cell_height + i, TTY_COLOR_BLACK);
-            }
-        }
-
-        visible = false;
-    }
 }
